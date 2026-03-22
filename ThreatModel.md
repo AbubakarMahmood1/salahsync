@@ -70,9 +70,9 @@
 
 &#x20;  - Surface: Copy/paste JSON import; untrusted payloads can replace the entire DB.
 
-&#x20;  - Mitigations: schema version checks, strict type validation (`\_read\*` helpers), a maximum copy/paste backup size limit, parsing errors surfaced to the user, asynchronous preview parsing to reduce UI stalls, optional passphrase-protected AES-256-GCM exports/imports for confidentiality and authenticated decryption, unsigned SHA-256 checksum metadata on plaintext exports to detect corruption or naive tampering during copy/paste, transactional import to avoid partial writes, and preview/confirmation dialogs.
+&#x20;  - Mitigations: schema version checks, strict type validation (`\_read\*` helpers), a maximum copy/paste backup size limit, parsing errors surfaced to the user, asynchronous preview parsing to reduce UI stalls, optional passphrase-protected AES-256-GCM exports/imports for confidentiality and authenticated decryption, unsigned SHA-256 checksum metadata on plaintext exports to detect corruption or naive tampering during copy/paste, temporary file staging plus file-based share/import to reduce clipboard dependence, transactional import to avoid partial writes, and preview/confirmation dialogs.
 
-&#x20;  - Gaps: protected backups are only as strong as the user-chosen passphrase, plaintext export remains available for compatibility, checksum metadata is not a signature and offers no real authenticity against an attacker who can recompute it, and clipboard usage can still leak either plaintext backups or encrypted blobs.
+&#x20;  - Gaps: protected backups are only as strong as the user-chosen passphrase, plaintext export remains available for compatibility, checksum metadata is not a signature and offers no real authenticity against an attacker who can recompute it, and clipboard usage can still leak either plaintext backups or encrypted blobs when the copy path is used.
 
 
 

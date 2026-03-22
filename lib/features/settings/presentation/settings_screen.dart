@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:file_selector/file_selector.dart' as fs;
+import 'package:share_plus/share_plus.dart';
 
 import '../../../app/providers.dart';
 import '../../../core/notifications/notification_preferences.dart';
@@ -11,7 +13,13 @@ import '../../../core/time/geo_coordinates.dart';
 import '../../../core/time/prayer_calculation_config.dart';
 import '../../../core/time/salah_prayer.dart';
 import '../../../core/time/timezone_name.dart';
+import '../../../data/services/backup_file_transfer_service.dart';
 import '../../../data/services/backup_service.dart';
+
+const _backupFileTypeGroup = fs.XTypeGroup(
+  label: 'SalahSync backup',
+  extensions: ['json'],
+);
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -592,7 +600,7 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'Export the local database as JSON or import a prior SalahSync backup. This current flow is copy/paste based and replaces the local database on import.',
+                    'Export the local database as a backup file or JSON, and import a prior SalahSync backup from file or pasted text. Import always replaces the current local database.',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: scheme.onSurfaceVariant,
                     ),
@@ -608,7 +616,7 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
                             : _exportBackup,
                         icon: const Icon(Icons.file_upload_outlined),
                         label: Text(
-                          _isBackupBusy ? 'Working...' : 'Export JSON',
+                          _isBackupBusy ? 'Working...' : 'Export Backup',
                         ),
                       ),
                       FilledButton.tonalIcon(
@@ -617,6 +625,13 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
                             : _importBackup,
                         icon: const Icon(Icons.file_download_outlined),
                         label: const Text('Import JSON'),
+                      ),
+                      FilledButton.tonalIcon(
+                        onPressed: _isSaving || _isBackupBusy
+                            ? null
+                            : _importBackupFile,
+                        icon: const Icon(Icons.folder_open_outlined),
+                        label: const Text('Import File'),
                       ),
                     ],
                   ),
@@ -948,6 +963,9 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
         context: context,
         builder: (context) {
           return _BackupExportDialog(
+            backupFileTransferService: ref.read(
+              backupFileTransferServiceProvider,
+            ),
             json: json,
             isEncrypted: normalizedPassphrase != null,
           );
@@ -967,11 +985,51 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
   }
 
   Future<void> _importBackup() async {
+    await _showImportBackupDialog();
+  }
+
+  Future<void> _importBackupFile() async {
+    setState(() {
+      _isBackupBusy = true;
+    });
+
+    try {
+      final selectedFile = await fs.openFile(
+        acceptedTypeGroups: const [_backupFileTypeGroup],
+        confirmButtonText: 'Select Backup',
+      );
+      if (selectedFile == null) {
+        return;
+      }
+
+      final json = await ref
+          .read(backupFileTransferServiceProvider)
+          .readBackupFile(selectedFile.path);
+      if (!mounted) {
+        return;
+      }
+
+      await _showImportBackupDialog(initialJson: json);
+    } catch (error) {
+      if (mounted) {
+        _showMessage(error.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isBackupBusy = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _showImportBackupDialog({String initialJson = ''}) async {
     final imported = await showDialog<ImportResult>(
       context: context,
       builder: (context) {
         return _BackupImportDialog(
           backupService: ref.read(backupServiceProvider),
+          initialJson: initialJson,
         );
       },
     );
@@ -1287,8 +1345,13 @@ class _BackupPassphraseDialogState extends State<_BackupPassphraseDialog> {
 }
 
 class _BackupExportDialog extends StatelessWidget {
-  const _BackupExportDialog({required this.json, required this.isEncrypted});
+  const _BackupExportDialog({
+    required this.backupFileTransferService,
+    required this.json,
+    required this.isEncrypted,
+  });
 
+  final BackupFileTransferService backupFileTransferService;
   final String json;
   final bool isEncrypted;
 
@@ -1297,7 +1360,7 @@ class _BackupExportDialog extends StatelessWidget {
     final controller = TextEditingController(text: json);
 
     return AlertDialog(
-      title: const Text('Export JSON backup'),
+      title: const Text('Export backup'),
       content: SizedBox(
         width: 640,
         child: Column(
@@ -1345,6 +1408,54 @@ class _BackupExportDialog extends StatelessWidget {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Close'),
         ),
+        FilledButton.tonalIcon(
+          onPressed: () async {
+            try {
+              final staged = await backupFileTransferService.stageBackupFile(
+                json,
+                encrypted: isEncrypted,
+              );
+              final result = await SharePlus.instance.share(
+                ShareParams(
+                  files: [
+                    XFile(
+                      staged.path,
+                      mimeType: 'application/json',
+                      name: staged.fileName,
+                    ),
+                  ],
+                  title: 'SalahSync backup',
+                  subject: 'SalahSync backup',
+                  text: isEncrypted
+                      ? 'SalahSync protected backup file. Keep the passphrase separate from the JSON file.'
+                      : 'SalahSync backup file.',
+                ),
+              );
+              if (!context.mounted) {
+                return;
+              }
+              final message = switch (result.status) {
+                ShareResultStatus.success => 'Backup file shared.',
+                ShareResultStatus.dismissed =>
+                  'Backup file prepared. Share was dismissed.',
+                ShareResultStatus.unavailable =>
+                  'Backup file prepared. Share result is unavailable here.',
+              };
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text(message)));
+            } catch (error) {
+              if (!context.mounted) {
+                return;
+              }
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text(error.toString())));
+            }
+          },
+          icon: const Icon(Icons.share_outlined),
+          label: const Text('Share File'),
+        ),
         OutlinedButton.icon(
           onPressed: () async {
             await Clipboard.setData(const ClipboardData(text: ''));
@@ -1383,9 +1494,13 @@ class _BackupExportDialog extends StatelessWidget {
 }
 
 class _BackupImportDialog extends StatefulWidget {
-  const _BackupImportDialog({required this.backupService});
+  const _BackupImportDialog({
+    required this.backupService,
+    this.initialJson = '',
+  });
 
   final BackupService backupService;
+  final String initialJson;
 
   @override
   State<_BackupImportDialog> createState() => _BackupImportDialogState();
@@ -1402,7 +1517,7 @@ class _BackupImportDialogState extends State<_BackupImportDialog> {
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController();
+    _controller = TextEditingController(text: widget.initialJson);
     _passphraseController = TextEditingController();
   }
 
@@ -1416,7 +1531,7 @@ class _BackupImportDialogState extends State<_BackupImportDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Import JSON backup'),
+      title: const Text('Import backup'),
       content: SizedBox(
         width: 640,
         child: Column(

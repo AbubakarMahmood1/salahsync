@@ -13,6 +13,7 @@ import '../data/repositories/mosque_repository.dart';
 import '../data/repositories/settings_repository.dart';
 import '../data/repositories/timing_rule_repository.dart';
 import '../data/seeding/app_seed_service.dart';
+import '../data/services/backup_file_transfer_service.dart';
 import '../data/services/backup_service.dart';
 import '../data/services/mosque_schedule_read_service.dart';
 import '../data/services/notification_schedule_builder.dart';
@@ -38,6 +39,12 @@ final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
 
 final backupServiceProvider = Provider<BackupService>((ref) {
   return BackupService(ref.watch(databaseProvider));
+});
+
+final backupFileTransferServiceProvider = Provider<BackupFileTransferService>((
+  ref,
+) {
+  return BackupFileTransferService();
 });
 
 final appSeedServiceProvider = Provider<AppSeedService>((ref) {
