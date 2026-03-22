@@ -920,14 +920,26 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
   }
 
   Future<void> _exportBackup() async {
+    final passphrase = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return const _BackupPassphraseDialog();
+      },
+    );
+
+    if (passphrase == null) {
+      return;
+    }
+
     setState(() {
       _isBackupBusy = true;
     });
 
     try {
+      final normalizedPassphrase = normalizeBackupPassphraseInput(passphrase);
       final json = await ref
           .read(backupServiceProvider)
-          .exportToJson(pretty: true);
+          .exportToJson(pretty: true, passphrase: normalizedPassphrase);
       if (!mounted) {
         return;
       }
@@ -935,7 +947,10 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
       await showDialog<void>(
         context: context,
         builder: (context) {
-          return _BackupExportDialog(json: json);
+          return _BackupExportDialog(
+            json: json,
+            isEncrypted: normalizedPassphrase != null,
+          );
         },
       );
     } catch (error) {
@@ -1165,10 +1180,117 @@ class _NotificationMatrix extends StatelessWidget {
   }
 }
 
+class _BackupPassphraseDialog extends StatefulWidget {
+  const _BackupPassphraseDialog();
+
+  @override
+  State<_BackupPassphraseDialog> createState() =>
+      _BackupPassphraseDialogState();
+}
+
+class _BackupPassphraseDialogState extends State<_BackupPassphraseDialog> {
+  late final TextEditingController _controller;
+  bool _obscureText = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Protect backup export?'),
+      content: SizedBox(
+        width: 520,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Leave this blank to export readable JSON, or set a passphrase to encrypt the backup before copying it.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _controller,
+              obscureText: _obscureText,
+              enableSuggestions: false,
+              autocorrect: false,
+              decoration: InputDecoration(
+                labelText: 'Backup passphrase',
+                helperText:
+                    'Optional. Use at least $kMinBackupPassphraseLength characters for protected exports.',
+                errorText: _error,
+                suffixIcon: IconButton(
+                  onPressed: () {
+                    setState(() {
+                      _obscureText = !_obscureText;
+                    });
+                  },
+                  icon: Icon(
+                    _obscureText
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Keep the passphrase separate from the JSON. SalahSync cannot recover a lost backup passphrase.',
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        OutlinedButton(
+          onPressed: () => Navigator.of(context).pop(''),
+          child: const Text('Skip Encryption'),
+        ),
+        FilledButton(
+          onPressed: _protectExport,
+          child: const Text('Protect Export'),
+        ),
+      ],
+    );
+  }
+
+  void _protectExport() {
+    try {
+      final normalized = normalizeBackupPassphraseInput(_controller.text);
+      if (normalized == null) {
+        setState(() {
+          _error = 'Enter a passphrase or use Skip Encryption.';
+        });
+        return;
+      }
+      Navigator.of(context).pop(normalized);
+    } on BackupFormatException catch (error) {
+      setState(() {
+        _error = error.message;
+      });
+    }
+  }
+}
+
 class _BackupExportDialog extends StatelessWidget {
-  const _BackupExportDialog({required this.json});
+  const _BackupExportDialog({required this.json, required this.isEncrypted});
 
   final String json;
+  final bool isEncrypted;
 
   @override
   Widget build(BuildContext context) {
@@ -1182,8 +1304,10 @@ class _BackupExportDialog extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Copy this JSON to move your local data to another device or keep a personal backup snapshot. Exports include an unsigned checksum so later imports can detect corruption during copy/paste.',
+            Text(
+              isEncrypted
+                  ? 'Copy this passphrase-protected backup to move your local data to another device or keep a protected snapshot. Keep the JSON and passphrase separate.'
+                  : 'Copy this JSON to move your local data to another device or keep a personal backup snapshot. Exports include an unsigned checksum so later imports can detect corruption during copy/paste.',
             ),
             const SizedBox(height: 12),
             Container(
@@ -1192,8 +1316,10 @@ class _BackupExportDialog extends StatelessWidget {
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: const Text(
-                'Sensitive data warning: copying exports to the system clipboard can expose mosque notes, coordinates, and logs to keyboards or clipboard-manager apps.',
+              child: Text(
+                isEncrypted
+                    ? 'Clipboard warning: this copied blob is encrypted, but anyone with both the JSON and the passphrase can still restore your data.'
+                    : 'Sensitive data warning: copying exports to the system clipboard can expose mosque notes, coordinates, and logs to keyboards or clipboard-manager apps.',
               ),
             ),
             const SizedBox(height: 12),
@@ -1203,8 +1329,10 @@ class _BackupExportDialog extends StatelessWidget {
                 readOnly: true,
                 maxLines: 16,
                 minLines: 8,
-                decoration: const InputDecoration(
-                  labelText: 'Backup JSON',
+                decoration: InputDecoration(
+                  labelText: isEncrypted
+                      ? 'Encrypted backup JSON'
+                      : 'Backup JSON',
                   alignLabelWithHint: true,
                 ),
               ),
@@ -1237,7 +1365,13 @@ class _BackupExportDialog extends StatelessWidget {
               return;
             }
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Backup JSON copied.')),
+              SnackBar(
+                content: Text(
+                  isEncrypted
+                      ? 'Encrypted backup JSON copied.'
+                      : 'Backup JSON copied.',
+                ),
+              ),
             );
           },
           icon: const Icon(Icons.copy_rounded),
@@ -1259,19 +1393,23 @@ class _BackupImportDialog extends StatefulWidget {
 
 class _BackupImportDialogState extends State<_BackupImportDialog> {
   late final TextEditingController _controller;
+  late final TextEditingController _passphraseController;
   BackupPreview? _preview;
   String? _error;
   bool _isWorking = false;
+  bool _obscurePassphrase = true;
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController();
+    _passphraseController = TextEditingController();
   }
 
   @override
   void dispose() {
     _controller.dispose();
+    _passphraseController.dispose();
     super.dispose();
   }
 
@@ -1287,6 +1425,30 @@ class _BackupImportDialogState extends State<_BackupImportDialog> {
           children: [
             const Text(
               'Paste a prior SalahSync backup here. Import replaces the current local database.',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _passphraseController,
+              obscureText: _obscurePassphrase,
+              enableSuggestions: false,
+              autocorrect: false,
+              decoration: InputDecoration(
+                labelText: 'Backup passphrase',
+                helperText:
+                    'Only needed for passphrase-protected exports. Leave blank for plaintext backups.',
+                suffixIcon: IconButton(
+                  onPressed: () {
+                    setState(() {
+                      _obscurePassphrase = !_obscurePassphrase;
+                    });
+                  },
+                  icon: Icon(
+                    _obscurePassphrase
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                  ),
+                ),
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -1334,6 +1496,7 @@ class _BackupImportDialogState extends State<_BackupImportDialog> {
     try {
       final preview = await widget.backupService.previewJsonAsync(
         _controller.text.trim(),
+        passphrase: _passphraseController.text,
       );
       if (!mounted) {
         return;
@@ -1389,6 +1552,7 @@ class _BackupImportDialogState extends State<_BackupImportDialog> {
     try {
       final result = await widget.backupService.importFromJson(
         _controller.text.trim(),
+        passphrase: _passphraseController.text,
       );
       if (!mounted) {
         return;
@@ -1438,7 +1602,17 @@ class _BackupPreviewCard extends StatelessWidget {
                 'backup v${preview.backupSchemaVersion}, db v${preview.databaseSchemaVersion}',
           ),
           const SizedBox(height: 6),
+          _RuntimeRow(label: 'Protection', value: preview.protection.label),
+          const SizedBox(height: 6),
           _RuntimeRow(label: 'Integrity', value: preview.integrity.label),
+          if (preview.protection.isEncrypted) ...[
+            const SizedBox(height: 12),
+            const _RuntimeBanner(
+              icon: Icons.lock_outline_rounded,
+              message:
+                  'This backup was passphrase-protected at export time. SalahSync only decrypted it after the correct passphrase was provided.',
+            ),
+          ],
           if (!preview.integrity.isVerified) ...[
             const SizedBox(height: 12),
             const _RuntimeBanner(

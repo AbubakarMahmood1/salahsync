@@ -146,6 +146,7 @@ void main() {
         .get();
 
     expect(preview.backupSchemaVersion, kBackupSchemaVersion);
+    expect(preview.protection.status, BackupProtectionStatus.plaintext);
     expect(preview.integrity.status, BackupIntegrityStatus.verified);
     expect(preview.integrity.algorithm, kBackupIntegrityAlgorithm);
     expect(preview.summary.mosqueCount, 1);
@@ -202,6 +203,53 @@ void main() {
     );
   });
 
+  test(
+    'passphrase-protected exports preview and import with the correct passphrase',
+    () async {
+      await seedService.seedIfEmpty();
+
+      final json = await sourceBackupService.exportToJson(
+        passphrase: 'correct horse battery staple',
+      );
+      final preview = await sourceBackupService.previewJsonAsync(
+        json,
+        passphrase: 'correct horse battery staple',
+      );
+      final importResult = await destinationBackupService.importFromJson(
+        json,
+        passphrase: 'correct horse battery staple',
+      );
+
+      expect(
+        preview.protection.status,
+        BackupProtectionStatus.passphraseEncrypted,
+      );
+      expect(preview.protection.isEncrypted, isTrue);
+      expect(preview.integrity.status, BackupIntegrityStatus.verified);
+      expect(importResult.summary.mosqueCount, 1);
+    },
+  );
+
+  test('encrypted exports reject a missing or incorrect passphrase', () async {
+    await seedService.seedIfEmpty();
+
+    final json = await sourceBackupService.exportToJson(
+      passphrase: 'correct horse battery staple',
+    );
+
+    await expectLater(
+      sourceBackupService.previewJsonAsync(json),
+      throwsA(isA<BackupFormatException>()),
+    );
+    await expectLater(
+      destinationBackupService.importFromJson(
+        json,
+        passphrase: 'wrong-passphrase',
+      ),
+      throwsA(isA<BackupFormatException>()),
+    );
+  });
+
   test('legacy backups without integrity metadata still import', () async {
     await seedService.seedIfEmpty();
 
@@ -216,6 +264,7 @@ void main() {
       legacyJson,
     );
 
+    expect(preview.protection.status, BackupProtectionStatus.plaintext);
     expect(preview.integrity.status, BackupIntegrityStatus.unsignedLegacy);
     expect(importResult.summary.mosqueCount, 1);
   });

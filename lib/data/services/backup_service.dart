@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:isolate';
 
-import 'package:crypto/crypto.dart';
+import 'package:crypto/crypto.dart' as crypto;
+import 'package:cryptography/cryptography.dart';
+import 'package:cryptography/helpers.dart';
 import 'package:drift/drift.dart';
 
 import '../../core/mosque/month_day.dart';
@@ -15,24 +17,34 @@ class BackupService {
 
   final AppDatabase _db;
 
-  Future<String> exportToJson({bool pretty = false}) async {
+  Future<String> exportToJson({bool pretty = false, String? passphrase}) async {
     final payload = await _buildPayload();
+    final exportObject = await _wrapPayloadForExport(
+      payload,
+      passphrase: normalizeBackupPassphraseInput(passphrase),
+    );
     return pretty
-        ? const JsonEncoder.withIndent('  ').convert(payload)
-        : jsonEncode(payload);
+        ? const JsonEncoder.withIndent('  ').convert(exportObject)
+        : jsonEncode(exportObject);
   }
 
-  Future<BackupPreview> previewJsonAsync(String json) async {
-    final payload = await Isolate.run(() => _decodeBackupPayload(json));
-    return _buildPreview(payload);
+  Future<BackupPreview> previewJsonAsync(
+    String json, {
+    String? passphrase,
+  }) async {
+    final decoded = await _readBackupPayloadAsync(json, passphrase: passphrase);
+    return _buildPreview(decoded.payload, protection: decoded.protection);
   }
 
   BackupPreview previewJson(String json) {
-    final payload = _decodeBackupPayload(json);
-    return _buildPreview(payload);
+    final decoded = _readBackupPayloadSync(json);
+    return _buildPreview(decoded.payload, protection: decoded.protection);
   }
 
-  BackupPreview _buildPreview(Map<String, dynamic> payload) {
+  BackupPreview _buildPreview(
+    Map<String, dynamic> payload, {
+    required BackupProtectionInfo protection,
+  }) {
     final backupSchemaVersion = _readInt(payload, 'backupSchemaVersion');
     if (backupSchemaVersion != kBackupSchemaVersion) {
       throw BackupFormatException(
@@ -46,6 +58,7 @@ class BackupService {
       backupSchemaVersion: backupSchemaVersion,
       databaseSchemaVersion: _readInt(payload, 'databaseSchemaVersion'),
       exportedAt: _readString(payload, 'exportedAt'),
+      protection: protection,
       integrity: integrity,
       summary: BackupSummary(
         appSettingsCount: _readList(data, 'appSettingsEntries').length,
@@ -61,9 +74,10 @@ class BackupService {
     );
   }
 
-  Future<ImportResult> importFromJson(String json) async {
-    final payload = await Isolate.run(() => _decodeBackupPayload(json));
-    final preview = _buildPreview(payload);
+  Future<ImportResult> importFromJson(String json, {String? passphrase}) async {
+    final decoded = await _readBackupPayloadAsync(json, passphrase: passphrase);
+    final payload = decoded.payload;
+    final preview = _buildPreview(payload, protection: decoded.protection);
     final data = _readMap(payload, 'data');
 
     final appSettingsEntries = _readList(
@@ -314,6 +328,43 @@ class BackupService {
     };
     return payload;
   }
+
+  Future<Map<String, dynamic>> _wrapPayloadForExport(
+    Map<String, dynamic> payload, {
+    required String? passphrase,
+  }) async {
+    if (passphrase == null) {
+      return payload;
+    }
+
+    final salt = randomBytes(kBackupSaltBytes);
+    final nonce = randomBytes(kBackupNonceBytes);
+    final secretKey = await _deriveBackupKey(
+      passphrase: passphrase,
+      salt: salt,
+    );
+    final cleartext = utf8.encode(jsonEncode(payload));
+    final secretBox = await _backupCipher.encrypt(
+      cleartext,
+      secretKey: secretKey,
+      nonce: nonce,
+    );
+
+    return {
+      'backupEnvelopeVersion': kBackupEnvelopeVersion,
+      'format': kEncryptedBackupFormat,
+      'protection': {
+        'mode': kBackupProtectionModePassphrase,
+        'cipher': kBackupEncryptionCipher,
+        'kdf': kBackupKdfAlgorithm,
+        'iterations': kBackupPbkdf2Iterations,
+        'salt': base64Encode(salt),
+        'nonce': base64Encode(secretBox.nonce),
+        'tag': base64Encode(secretBox.mac.bytes),
+      },
+      'ciphertext': base64Encode(secretBox.cipherText),
+    };
+  }
 }
 
 class BackupPreview {
@@ -321,6 +372,7 @@ class BackupPreview {
     required this.backupSchemaVersion,
     required this.databaseSchemaVersion,
     required this.exportedAt,
+    required this.protection,
     required this.integrity,
     required this.summary,
   });
@@ -328,6 +380,7 @@ class BackupPreview {
   final int backupSchemaVersion;
   final int databaseSchemaVersion;
   final String exportedAt;
+  final BackupProtectionInfo protection;
   final BackupIntegrityInfo integrity;
   final BackupSummary summary;
 }
@@ -364,6 +417,38 @@ class BackupSummary {
   final int prayerLogCount;
 }
 
+enum BackupProtectionStatus { plaintext, passphraseEncrypted }
+
+class BackupProtectionInfo {
+  const BackupProtectionInfo({
+    required this.status,
+    required this.cipher,
+    required this.kdf,
+    required this.iterations,
+  });
+
+  const BackupProtectionInfo.plaintext()
+    : status = BackupProtectionStatus.plaintext,
+      cipher = null,
+      kdf = null,
+      iterations = null;
+
+  final BackupProtectionStatus status;
+  final String? cipher;
+  final String? kdf;
+  final int? iterations;
+
+  bool get isEncrypted => status == BackupProtectionStatus.passphraseEncrypted;
+
+  String get label {
+    return switch (status) {
+      BackupProtectionStatus.plaintext => 'Plaintext JSON',
+      BackupProtectionStatus.passphraseEncrypted =>
+        'Passphrase protected ($cipher)',
+    };
+  }
+}
+
 enum BackupIntegrityStatus { verified, unsignedLegacy }
 
 class BackupIntegrityInfo {
@@ -387,6 +472,16 @@ class BackupIntegrityInfo {
   }
 }
 
+class _DecodedBackupPayload {
+  const _DecodedBackupPayload({
+    required this.payload,
+    required this.protection,
+  });
+
+  final Map<String, dynamic> payload;
+  final BackupProtectionInfo protection;
+}
+
 class BackupFormatException implements Exception {
   BackupFormatException(this.message);
 
@@ -398,10 +493,39 @@ class BackupFormatException implements Exception {
 
 const kBackupSchemaVersion = 1;
 const kMaxBackupCharacters = 2 * 1024 * 1024;
+const kMinBackupPassphraseLength = 8;
+const kBackupEnvelopeVersion = 1;
 const kBackupIntegrityAlgorithm = 'sha256';
 const kBackupIntegrityScope = 'full-payload-v1';
+const kEncryptedBackupFormat = 'encrypted';
+const kBackupProtectionModePassphrase = 'passphrase';
+const kBackupEncryptionCipher = 'aes-256-gcm';
+const kBackupKdfAlgorithm = 'pbkdf2-hmac-sha256';
+const kBackupPbkdf2Iterations = 120000;
+const kBackupSaltBytes = 16;
+const kBackupNonceBytes = 12;
 
-Map<String, dynamic> _decodeBackupPayload(String json) {
+final _backupCipher = AesGcm.with256bits();
+final _backupKeyDerivation = Pbkdf2(
+  macAlgorithm: Hmac.sha256(),
+  iterations: kBackupPbkdf2Iterations,
+  bits: 256,
+);
+
+String? normalizeBackupPassphraseInput(String? value) {
+  final trimmed = value?.trim() ?? '';
+  if (trimmed.isEmpty) {
+    return null;
+  }
+  if (trimmed.length < kMinBackupPassphraseLength) {
+    throw BackupFormatException(
+      'Backup passphrases must be at least $kMinBackupPassphraseLength characters.',
+    );
+  }
+  return trimmed;
+}
+
+Map<String, dynamic> _decodeBackupObject(String json) {
   final trimmed = json.trim();
   if (trimmed.isEmpty) {
     throw BackupFormatException('Backup JSON cannot be empty.');
@@ -421,6 +545,153 @@ Map<String, dynamic> _decodeBackupPayload(String json) {
     return decoded.map((key, value) => MapEntry(key.toString(), value));
   } on FormatException catch (error) {
     throw BackupFormatException('Invalid JSON: ${error.message}');
+  }
+}
+
+_DecodedBackupPayload _readBackupPayloadSync(String json) {
+  final decoded = _decodeBackupObject(json);
+  if (_isEncryptedBackupEnvelope(decoded)) {
+    throw BackupFormatException(
+      'This backup is passphrase-protected. Use the async preview or import flow with the backup passphrase.',
+    );
+  }
+  return _DecodedBackupPayload(
+    payload: decoded,
+    protection: const BackupProtectionInfo.plaintext(),
+  );
+}
+
+Future<_DecodedBackupPayload> _readBackupPayloadAsync(
+  String json, {
+  String? passphrase,
+}) async {
+  final decoded = await Isolate.run(() => _decodeBackupObject(json));
+  if (!_isEncryptedBackupEnvelope(decoded)) {
+    return _DecodedBackupPayload(
+      payload: decoded,
+      protection: const BackupProtectionInfo.plaintext(),
+    );
+  }
+
+  final protection = _readEncryptedProtectionInfo(decoded);
+  final normalizedPassphrase = normalizeBackupPassphraseInput(passphrase);
+  if (normalizedPassphrase == null) {
+    throw BackupFormatException(
+      'This backup is passphrase-protected. Enter the backup passphrase to preview or import it.',
+    );
+  }
+
+  final payload = await _decryptBackupEnvelope(
+    decoded,
+    passphrase: normalizedPassphrase,
+  );
+  return _DecodedBackupPayload(payload: payload, protection: protection);
+}
+
+bool _isEncryptedBackupEnvelope(Map<String, dynamic> payload) {
+  return payload['format'] == kEncryptedBackupFormat;
+}
+
+BackupProtectionInfo _readEncryptedProtectionInfo(
+  Map<String, dynamic> payload,
+) {
+  final envelopeVersion = _readInt(payload, 'backupEnvelopeVersion');
+  if (envelopeVersion != kBackupEnvelopeVersion) {
+    throw BackupFormatException(
+      'Unsupported encrypted backup envelope version $envelopeVersion.',
+    );
+  }
+
+  final protection = _readMap(payload, 'protection');
+  final mode = _readString(protection, 'mode');
+  final cipher = _readString(protection, 'cipher');
+  final kdf = _readString(protection, 'kdf');
+  final iterations = _readInt(protection, 'iterations');
+
+  if (mode != kBackupProtectionModePassphrase) {
+    throw BackupFormatException('Unsupported backup protection mode: $mode.');
+  }
+  if (cipher != kBackupEncryptionCipher || kdf != kBackupKdfAlgorithm) {
+    throw BackupFormatException(
+      'Unsupported backup encryption metadata: $cipher / $kdf.',
+    );
+  }
+  if (iterations != kBackupPbkdf2Iterations) {
+    throw BackupFormatException(
+      'Unsupported backup key-derivation settings: $iterations iterations.',
+    );
+  }
+
+  _decodeBase64(_readString(protection, 'salt'), fieldName: 'salt');
+  _decodeBase64(_readString(protection, 'nonce'), fieldName: 'nonce');
+  _decodeBase64(_readString(protection, 'tag'), fieldName: 'tag');
+  _decodeBase64(_readString(payload, 'ciphertext'), fieldName: 'ciphertext');
+
+  return BackupProtectionInfo(
+    status: BackupProtectionStatus.passphraseEncrypted,
+    cipher: cipher,
+    kdf: kdf,
+    iterations: iterations,
+  );
+}
+
+Future<Map<String, dynamic>> _decryptBackupEnvelope(
+  Map<String, dynamic> payload, {
+  required String passphrase,
+}) async {
+  try {
+    final protection = _readMap(payload, 'protection');
+    final salt = _decodeBase64(
+      _readString(protection, 'salt'),
+      fieldName: 'salt',
+    );
+    final nonce = _decodeBase64(
+      _readString(protection, 'nonce'),
+      fieldName: 'nonce',
+    );
+    final tag = _decodeBase64(_readString(protection, 'tag'), fieldName: 'tag');
+    final ciphertext = _decodeBase64(
+      _readString(payload, 'ciphertext'),
+      fieldName: 'ciphertext',
+    );
+
+    final secretKey = await _deriveBackupKey(
+      passphrase: passphrase,
+      salt: salt,
+    );
+    final cleartext = await _backupCipher.decrypt(
+      SecretBox(ciphertext, nonce: nonce, mac: Mac(tag)),
+      secretKey: secretKey,
+    );
+    return _decodeBackupObject(utf8.decode(cleartext));
+  } on SecretBoxAuthenticationError {
+    throw BackupFormatException(
+      'Could not decrypt backup. Check the backup passphrase and try again.',
+    );
+  } on FormatException catch (error) {
+    throw BackupFormatException(
+      'Encrypted backup payload is invalid: ${error.message}',
+    );
+  }
+}
+
+Future<SecretKey> _deriveBackupKey({
+  required String passphrase,
+  required List<int> salt,
+}) {
+  return _backupKeyDerivation.deriveKeyFromPassword(
+    password: passphrase,
+    nonce: salt,
+  );
+}
+
+List<int> _decodeBase64(String value, {required String fieldName}) {
+  try {
+    return base64Decode(value);
+  } on FormatException catch (error) {
+    throw BackupFormatException(
+      'Encrypted backup field "$fieldName" is not valid base64: ${error.message}',
+    );
   }
 }
 
@@ -468,7 +739,7 @@ String _computeBackupDigest(Map<String, dynamic> payload) {
     'data': payload['data'],
   };
   final canonicalJson = _canonicalJsonEncode(digestPayload);
-  return sha256.convert(utf8.encode(canonicalJson)).toString();
+  return crypto.sha256.convert(utf8.encode(canonicalJson)).toString();
 }
 
 String _canonicalJsonEncode(Object? value) {
