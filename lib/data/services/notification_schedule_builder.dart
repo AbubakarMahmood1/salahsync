@@ -6,6 +6,7 @@ import '../../core/notifications/notification_preferences.dart';
 import '../../core/notifications/scheduled_notification_plan.dart';
 import '../../core/time/prayer_calculation_config.dart';
 import '../../core/time/salah_prayer.dart';
+import '../../core/time/timezone_name.dart';
 import '../db/app_database.dart';
 import '../models/home_schedule_read_model.dart';
 import 'mosque_schedule_read_service.dart';
@@ -26,7 +27,10 @@ class NotificationScheduleBuilder {
     required NotificationPreferences preferences,
     Duration window = const Duration(hours: 48),
   }) {
-    final location = tz.getLocation(config.timezoneName);
+    final location = resolveTimezoneLocation(
+      config.timezoneName,
+      fallback: kDefaultTimezoneName,
+    );
     final windowStart = tz.TZDateTime.from(now, location);
     final cutoff = windowStart.add(window);
     final firstDay = tz.TZDateTime(

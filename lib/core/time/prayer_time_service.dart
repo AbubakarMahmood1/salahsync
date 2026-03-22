@@ -10,6 +10,7 @@ import 'prayer_times_snapshot.dart';
 import 'prayer_window.dart';
 import 'qibla_service.dart';
 import 'salah_prayer.dart';
+import 'timezone_name.dart';
 
 class PrayerTimeService {
   const PrayerTimeService();
@@ -18,7 +19,10 @@ class PrayerTimeService {
     required DateTime date,
     required PrayerCalculationConfig config,
   }) {
-    final location = tz.getLocation(config.timezoneName);
+    final location = resolveTimezoneLocation(
+      config.timezoneName,
+      fallback: kDefaultTimezoneName,
+    );
     final localDate = tz.TZDateTime(location, date.year, date.month, date.day);
     final parameters = _buildCalculationParameters(config);
 

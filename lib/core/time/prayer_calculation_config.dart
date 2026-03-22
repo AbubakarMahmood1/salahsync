@@ -1,5 +1,6 @@
 import 'geo_coordinates.dart';
 import 'salah_prayer.dart';
+import 'timezone_name.dart';
 
 enum PrayerCalculationMethodChoice {
   karachi,
@@ -86,7 +87,7 @@ class PrayerCalculationConfig {
     return const PrayerCalculationConfig(
       locationName: 'Khanewal, Pakistan',
       coordinates: GeoCoordinates(latitude: 30.3017, longitude: 71.9321),
-      timezoneName: 'Asia/Karachi',
+      timezoneName: kDefaultTimezoneName,
       method: PrayerCalculationMethodChoice.karachi,
       asrSchool: AsrJuristicSchool.hanafi,
       ishaEndConvention: IshaEndConvention.midnight,

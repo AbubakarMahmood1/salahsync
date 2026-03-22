@@ -4,6 +4,7 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:salahsync/core/time/prayer_calculation_config.dart';
 import 'package:salahsync/core/time/prayer_time_service.dart';
 import 'package:salahsync/core/time/salah_prayer.dart';
+import 'package:salahsync/core/time/timezone_name.dart';
 
 void main() {
   setUpAll(() {
@@ -121,6 +122,30 @@ void main() {
       );
 
       expect(snapshot.qiblaBearing, closeTo(260.5, 0.2));
+    });
+
+    test('falls back to the default timezone for invalid timezone names', () {
+      final invalidTimezoneConfig = config.copyWith(
+        timezoneName: 'Mars/Olympus',
+      );
+
+      final fallbackSnapshot = service.calculateDay(
+        date: DateTime(2026, 3, 21),
+        config: invalidTimezoneConfig,
+      );
+      final defaultSnapshot = service.calculateDay(
+        date: DateTime(2026, 3, 21),
+        config: config.copyWith(timezoneName: kDefaultTimezoneName),
+      );
+
+      expect(
+        _hhmm(fallbackSnapshot.timeOf(SalahPrayer.fajr)),
+        _hhmm(defaultSnapshot.timeOf(SalahPrayer.fajr)),
+      );
+      expect(
+        fallbackSnapshot.date.timeZoneName,
+        defaultSnapshot.date.timeZoneName,
+      );
     });
   });
 }

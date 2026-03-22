@@ -1,16 +1,25 @@
+import 'dart:convert';
+
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:timezone/data/latest.dart' as tz;
 
 import 'package:salahsync/core/notifications/notification_preferences.dart';
 import 'package:salahsync/core/settings/app_theme_mode.dart';
 import 'package:salahsync/core/time/prayer_calculation_config.dart';
 import 'package:salahsync/core/time/salah_prayer.dart';
+import 'package:salahsync/core/time/timezone_name.dart';
 import 'package:salahsync/data/db/app_database.dart';
+import 'package:salahsync/data/models/app_setting_keys.dart';
 import 'package:salahsync/data/repositories/settings_repository.dart';
 
 void main() {
   late AppDatabase database;
   late SettingsRepository repository;
+
+  setUpAll(() {
+    tz.initializeTimeZones();
+  });
 
   setUp(() {
     database = AppDatabase(NativeDatabase.memory());
@@ -109,4 +118,40 @@ void main() {
 
     expect(loaded, AppThemeMode.dark);
   });
+
+  test(
+    'loadPrayerCalculationConfig falls back to the default timezone for invalid persisted values',
+    () async {
+      await repository.put(
+        AppSettingKeys.defaultCoordinates,
+        jsonEncode({
+          'latitude': 30.3017,
+          'longitude': 71.9321,
+          'locationName': 'Broken timezone payload',
+          'timezoneName': 'Mars/Olympus',
+        }),
+      );
+
+      final loaded = await repository.loadPrayerCalculationConfig();
+
+      expect(loaded.timezoneName, kDefaultTimezoneName);
+    },
+  );
+
+  test(
+    'savePrayerCalculationConfig sanitizes invalid timezone names',
+    () async {
+      final invalidConfig = PrayerCalculationConfig.khanewalDefault().copyWith(
+        timezoneName: 'Mars/Olympus',
+      );
+
+      await repository.savePrayerCalculationConfig(invalidConfig);
+      final settings = await repository.getAll();
+      final payload =
+          jsonDecode(settings[AppSettingKeys.defaultCoordinates]!)
+              as Map<String, dynamic>;
+
+      expect(payload['timezoneName'], kDefaultTimezoneName);
+    },
+  );
 }

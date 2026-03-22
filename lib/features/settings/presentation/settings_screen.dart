@@ -10,6 +10,7 @@ import '../../../core/settings/app_theme_mode.dart';
 import '../../../core/time/geo_coordinates.dart';
 import '../../../core/time/prayer_calculation_config.dart';
 import '../../../core/time/salah_prayer.dart';
+import '../../../core/time/timezone_name.dart';
 import '../../../data/services/backup_service.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -177,8 +178,9 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
                     controller: _timezoneController,
                     decoration: const InputDecoration(
                       labelText: 'Timezone name',
+                      helperText: 'Use an IANA timezone like Asia/Karachi',
                     ),
-                    validator: _requiredValidator,
+                    validator: _timezoneValidator,
                   ),
                   const SizedBox(height: 14),
                   Row(
@@ -681,7 +683,10 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
         latitude: double.parse(_latitudeController.text.trim()),
         longitude: double.parse(_longitudeController.text.trim()),
       ),
-      timezoneName: _timezoneController.text.trim(),
+      timezoneName: sanitizeTimezoneName(
+        _timezoneController.text,
+        fallback: kDefaultTimezoneName,
+      ),
       method: _method,
       asrSchool: _asrSchool,
       ishaEndConvention: _ishaEndConvention,
@@ -960,6 +965,17 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
   String? _requiredValidator(String? value) {
     if (value == null || value.trim().isEmpty) {
       return 'Required';
+    }
+    return null;
+  }
+
+  String? _timezoneValidator(String? value) {
+    final requiredMessage = _requiredValidator(value);
+    if (requiredMessage != null) {
+      return requiredMessage;
+    }
+    if (!isValidTimezoneName(value!.trim())) {
+      return 'Use a valid timezone like Asia/Karachi';
     }
     return null;
   }

@@ -3,9 +3,11 @@ import 'dart:convert';
 import 'package:drift/drift.dart' show Value, driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:timezone/data/latest.dart' as tz;
 
 import 'package:salahsync/core/notifications/notification_preferences.dart';
 import 'package:salahsync/core/settings/app_theme_mode.dart';
+import 'package:salahsync/core/time/timezone_name.dart';
 import 'package:salahsync/data/db/app_database.dart';
 import 'package:salahsync/data/models/mosque_draft.dart';
 import 'package:salahsync/data/repositories/mosque_repository.dart';
@@ -25,6 +27,7 @@ void main() {
   late AppSeedService seedService;
 
   setUpAll(() {
+    tz.initializeTimeZones();
     driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
   });
 
@@ -174,4 +177,32 @@ void main() {
       throwsA(isA<BackupFormatException>()),
     );
   });
+
+  test(
+    'imported backups with invalid timezone values fall back safely',
+    () async {
+      await seedService.seedIfEmpty();
+
+      final decoded =
+          jsonDecode(await sourceBackupService.exportToJson())
+              as Map<String, dynamic>;
+      final data = decoded['data'] as Map<String, dynamic>;
+      final settingsRows = (data['appSettingsEntries'] as List<dynamic>)
+          .cast<Map<String, dynamic>>();
+      final coordinatesRow = settingsRows.firstWhere(
+        (row) => row['key'] == 'default_coordinates',
+      );
+      final coordinatesPayload =
+          jsonDecode(coordinatesRow['value'] as String) as Map<String, dynamic>;
+      coordinatesPayload['timezoneName'] = 'Mars/Olympus';
+      coordinatesRow['value'] = jsonEncode(coordinatesPayload);
+
+      await destinationBackupService.importFromJson(jsonEncode(decoded));
+      final loadedConfig = await SettingsRepository(
+        destinationDatabase,
+      ).loadPrayerCalculationConfig();
+
+      expect(loadedConfig.timezoneName, kDefaultTimezoneName);
+    },
+  );
 }

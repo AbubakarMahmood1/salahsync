@@ -9,6 +9,7 @@ import '../../core/notifications/notification_kind.dart';
 import '../../core/notifications/notification_runtime_status.dart';
 import '../../core/notifications/notification_sync_result.dart';
 import '../../core/notifications/scheduled_notification_plan.dart';
+import '../../core/time/timezone_name.dart';
 import '../db/app_database.dart';
 import '../repositories/mosque_repository.dart';
 import '../repositories/settings_repository.dart';
@@ -284,7 +285,10 @@ class NotificationSyncService {
     required String timezoneName,
     required bool useExactScheduling,
   }) async {
-    final location = tz.getLocation(timezoneName);
+    final location = resolveTimezoneLocation(
+      timezoneName,
+      fallback: kDefaultTimezoneName,
+    );
     final scheduledDate = tz.TZDateTime.from(plan.scheduledAt, location);
 
     await _plugin.zonedSchedule(

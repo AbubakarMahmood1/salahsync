@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 
 import '../../core/notifications/notification_preferences.dart';
 import '../../core/settings/app_theme_mode.dart';
+import '../../core/time/timezone_name.dart';
 import '../db/app_database.dart';
 import '../models/app_setting_keys.dart';
 import '../../core/time/geo_coordinates.dart';
@@ -117,8 +118,10 @@ class SettingsRepository {
       coordinates: coordinates,
       locationName:
           coordinatePayload['locationName'] as String? ?? config.locationName,
-      timezoneName:
-          coordinatePayload['timezoneName'] as String? ?? config.timezoneName,
+      timezoneName: sanitizeTimezoneName(
+        coordinatePayload['timezoneName'] as String?,
+        fallback: config.timezoneName,
+      ),
     );
   }
 
@@ -139,6 +142,11 @@ class SettingsRepository {
   Future<void> savePrayerCalculationConfig(
     PrayerCalculationConfig config,
   ) async {
+    final timezoneName = sanitizeTimezoneName(
+      config.timezoneName,
+      fallback: kDefaultTimezoneName,
+    );
+
     await putMany({
       AppSettingKeys.calculationMethod: config.method.name,
       AppSettingKeys.asrSchool: config.asrSchool.name,
@@ -159,7 +167,7 @@ class SettingsRepository {
         'latitude': config.coordinates.latitude,
         'longitude': config.coordinates.longitude,
         'locationName': config.locationName,
-        'timezoneName': config.timezoneName,
+        'timezoneName': timezoneName,
       }),
     });
   }

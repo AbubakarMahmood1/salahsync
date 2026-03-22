@@ -205,4 +205,27 @@ void main() {
       lessThanOrEqualTo(NotificationRuntimeStatus.recommendedPendingCap),
     );
   });
+
+  test('buildWindow falls back safely for invalid timezone names', () {
+    final invalidTimezoneConfig = config.copyWith(timezoneName: 'Mars/Olympus');
+    final preferences = NotificationPreferences.defaults().copyWith(
+      perPrayer: {
+        for (final prayer in kNotificationPreferencePrayers)
+          prayer: const PrayerNotificationPreference(
+            adhanEnabled: true,
+            jamaatEnabled: true,
+          ),
+      },
+    );
+
+    final plans = builder.buildWindow(
+      now: tz.TZDateTime(tz.getLocation(config.timezoneName), 2026, 3, 27, 15),
+      config: invalidTimezoneConfig,
+      notificationMosque: mosque,
+      rules: const [],
+      preferences: preferences,
+    );
+
+    expect(plans, isNotEmpty);
+  });
 }
