@@ -1149,7 +1149,7 @@ class _BackupExportDialog extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Copy this JSON to move your local data to another device or keep a personal backup snapshot.',
+              'Copy this JSON to move your local data to another device or keep a personal backup snapshot. Exports include an unsigned checksum so later imports can detect corruption during copy/paste.',
             ),
             const SizedBox(height: 12),
             Container(
@@ -1403,6 +1403,16 @@ class _BackupPreviewCard extends StatelessWidget {
             value:
                 'backup v${preview.backupSchemaVersion}, db v${preview.databaseSchemaVersion}',
           ),
+          const SizedBox(height: 6),
+          _RuntimeRow(label: 'Integrity', value: preview.integrity.label),
+          if (!preview.integrity.isVerified) ...[
+            const SizedBox(height: 12),
+            const _RuntimeBanner(
+              icon: Icons.info_outline_rounded,
+              message:
+                  'This backup predates checksum metadata, so SalahSync can import it but cannot verify whether it was modified after export.',
+            ),
+          ],
           const SizedBox(height: 10),
           _RuntimeRow(label: 'Settings', value: '${summary.appSettingsCount}'),
           const SizedBox(height: 6),

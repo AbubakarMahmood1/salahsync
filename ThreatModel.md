@@ -70,9 +70,9 @@
 
 &#x20;  - Surface: Copy/paste JSON import; untrusted payloads can replace the entire DB.
 
-&#x20;  - Mitigations: schema version checks, strict type validation (`\_read\*` helpers), a maximum copy/paste backup size limit, parsing errors surfaced to the user, asynchronous preview parsing to reduce UI stalls, transactional import to avoid partial writes, and preview/confirmation dialogs.
+&#x20;  - Mitigations: schema version checks, strict type validation (`\_read\*` helpers), a maximum copy/paste backup size limit, parsing errors surfaced to the user, asynchronous preview parsing to reduce UI stalls, unsigned SHA-256 checksum metadata on new exports to detect corruption or naive tampering during copy/paste, transactional import to avoid partial writes, and preview/confirmation dialogs.
 
-&#x20;  - Gaps: no cryptographic integrity or authenticity, and clipboard usage can leak sensitive data to other apps despite the in-app warning and manual clear option.
+&#x20;  - Gaps: checksum metadata is not a signature and offers no real authenticity against an attacker who can recompute it, and clipboard usage can leak sensitive data to other apps despite the in-app warning and manual clear option.
 
 
 
@@ -128,7 +128,7 @@
 
 \*\*Attacker stories\*\*
 
-\- \*\*Malicious backup\*\*: A user imports a backup received from the internet. It contains misleading mosque names or extreme offsets that spam notifications or crash scheduling. This is possible because backups are unauthenticated and can fully replace the DB. Impact is mainly integrity/availability; confidentiality is affected if the backup is exported back out.
+\- \*\*Malicious backup\*\*: A user imports a backup received from the internet. It contains misleading mosque names or extreme offsets that spam notifications or skew schedules. New exports include checksum metadata that can catch corruption or unsophisticated edits, but backups are still unauthenticated and can fully replace the DB if an attacker recomputes the checksum. Impact is mainly integrity/availability; confidentiality is affected if the backup is exported back out.
 
 \- \*\*Clipboard exfiltration\*\*: After exporting a JSON backup, another app reads the clipboard and exfiltrates mosque details or prayer logs. This is a privacy risk; mitigated only by OS clipboard protections.
 

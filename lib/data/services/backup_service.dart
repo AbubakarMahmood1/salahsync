@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:isolate';
 
+import 'package:crypto/crypto.dart';
 import 'package:drift/drift.dart';
 
 import '../../core/mosque/month_day.dart';
@@ -40,10 +41,12 @@ class BackupService {
     }
 
     final data = _readMap(payload, 'data');
+    final integrity = _readBackupIntegrityInfo(payload);
     return BackupPreview(
       backupSchemaVersion: backupSchemaVersion,
       databaseSchemaVersion: _readInt(payload, 'databaseSchemaVersion'),
       exportedAt: _readString(payload, 'exportedAt'),
+      integrity: integrity,
       summary: BackupSummary(
         appSettingsCount: _readList(data, 'appSettingsEntries').length,
         mosqueCount: _readList(data, 'mosques').length,
@@ -219,7 +222,7 @@ class BackupService {
         .get();
     final prayerLogEntries = await _db.select(_db.prayerLogEntries).get();
 
-    return {
+    final payload = <String, dynamic>{
       'backupSchemaVersion': kBackupSchemaVersion,
       'databaseSchemaVersion': _db.schemaVersion,
       'exportedAt': DateTime.now().toUtc().toIso8601String(),
@@ -303,6 +306,13 @@ class BackupService {
             .toList(growable: false),
       },
     };
+
+    payload['integrity'] = {
+      'algorithm': kBackupIntegrityAlgorithm,
+      'scope': kBackupIntegrityScope,
+      'digest': _computeBackupDigest(payload),
+    };
+    return payload;
   }
 }
 
@@ -311,12 +321,14 @@ class BackupPreview {
     required this.backupSchemaVersion,
     required this.databaseSchemaVersion,
     required this.exportedAt,
+    required this.integrity,
     required this.summary,
   });
 
   final int backupSchemaVersion;
   final int databaseSchemaVersion;
   final String exportedAt;
+  final BackupIntegrityInfo integrity;
   final BackupSummary summary;
 }
 
@@ -352,6 +364,29 @@ class BackupSummary {
   final int prayerLogCount;
 }
 
+enum BackupIntegrityStatus { verified, unsignedLegacy }
+
+class BackupIntegrityInfo {
+  const BackupIntegrityInfo({
+    required this.status,
+    required this.algorithm,
+    required this.digest,
+  });
+
+  final BackupIntegrityStatus status;
+  final String? algorithm;
+  final String? digest;
+
+  bool get isVerified => status == BackupIntegrityStatus.verified;
+
+  String get label {
+    return switch (status) {
+      BackupIntegrityStatus.verified => 'Checksum verified ($algorithm)',
+      BackupIntegrityStatus.unsignedLegacy => 'Legacy backup (unsigned)',
+    };
+  }
+}
+
 class BackupFormatException implements Exception {
   BackupFormatException(this.message);
 
@@ -363,6 +398,8 @@ class BackupFormatException implements Exception {
 
 const kBackupSchemaVersion = 1;
 const kMaxBackupCharacters = 2 * 1024 * 1024;
+const kBackupIntegrityAlgorithm = 'sha256';
+const kBackupIntegrityScope = 'full-payload-v1';
 
 Map<String, dynamic> _decodeBackupPayload(String json) {
   final trimmed = json.trim();
@@ -385,6 +422,69 @@ Map<String, dynamic> _decodeBackupPayload(String json) {
   } on FormatException catch (error) {
     throw BackupFormatException('Invalid JSON: ${error.message}');
   }
+}
+
+BackupIntegrityInfo _readBackupIntegrityInfo(Map<String, dynamic> payload) {
+  final rawIntegrity = payload['integrity'];
+  if (rawIntegrity == null) {
+    return const BackupIntegrityInfo(
+      status: BackupIntegrityStatus.unsignedLegacy,
+      algorithm: null,
+      digest: null,
+    );
+  }
+
+  final integrity = _mapValue(rawIntegrity);
+  final algorithm = _readString(integrity, 'algorithm');
+  final scope = _readString(integrity, 'scope');
+  final digest = _readString(integrity, 'digest');
+
+  if (algorithm != kBackupIntegrityAlgorithm ||
+      scope != kBackupIntegrityScope) {
+    throw BackupFormatException(
+      'Unsupported backup integrity metadata: $algorithm / $scope.',
+    );
+  }
+
+  final actualDigest = _computeBackupDigest(payload);
+  if (digest != actualDigest) {
+    throw BackupFormatException(
+      'Backup integrity check failed. The pasted JSON appears corrupted or modified.',
+    );
+  }
+
+  return BackupIntegrityInfo(
+    status: BackupIntegrityStatus.verified,
+    algorithm: algorithm,
+    digest: digest,
+  );
+}
+
+String _computeBackupDigest(Map<String, dynamic> payload) {
+  final digestPayload = <String, dynamic>{
+    'backupSchemaVersion': payload['backupSchemaVersion'],
+    'databaseSchemaVersion': payload['databaseSchemaVersion'],
+    'exportedAt': payload['exportedAt'],
+    'data': payload['data'],
+  };
+  final canonicalJson = _canonicalJsonEncode(digestPayload);
+  return sha256.convert(utf8.encode(canonicalJson)).toString();
+}
+
+String _canonicalJsonEncode(Object? value) {
+  if (value is Map) {
+    final keys = value.keys.map((key) => key.toString()).toList()..sort();
+    final entries = keys
+        .map((key) {
+          return '${jsonEncode(key)}:${_canonicalJsonEncode(value[key])}';
+        })
+        .join(',');
+    return '{$entries}';
+  }
+  if (value is List) {
+    return '[${value.map(_canonicalJsonEncode).join(',')}]';
+  }
+  return jsonEncode(value);
 }
 
 Map<String, dynamic> _mapValue(Object? value) {

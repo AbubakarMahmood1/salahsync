@@ -146,6 +146,8 @@ void main() {
         .get();
 
     expect(preview.backupSchemaVersion, kBackupSchemaVersion);
+    expect(preview.integrity.status, BackupIntegrityStatus.verified);
+    expect(preview.integrity.algorithm, kBackupIntegrityAlgorithm);
     expect(preview.summary.mosqueCount, 1);
     expect(importResult.summary.timingRuleCount, 10);
     expect(importedThemeMode, AppThemeMode.dark);
@@ -200,6 +202,50 @@ void main() {
     );
   });
 
+  test('legacy backups without integrity metadata still import', () async {
+    await seedService.seedIfEmpty();
+
+    final decoded =
+        jsonDecode(await sourceBackupService.exportToJson())
+            as Map<String, dynamic>;
+    decoded.remove('integrity');
+
+    final legacyJson = jsonEncode(decoded);
+    final preview = sourceBackupService.previewJson(legacyJson);
+    final importResult = await destinationBackupService.importFromJson(
+      legacyJson,
+    );
+
+    expect(preview.integrity.status, BackupIntegrityStatus.unsignedLegacy);
+    expect(importResult.summary.mosqueCount, 1);
+  });
+
+  test(
+    'previewJson rejects payloads with mismatched checksum metadata',
+    () async {
+      await seedService.seedIfEmpty();
+
+      final decoded =
+          jsonDecode(await sourceBackupService.exportToJson())
+              as Map<String, dynamic>;
+      final data = decoded['data'] as Map<String, dynamic>;
+      final mosques = (data['mosques'] as List<dynamic>)
+          .cast<Map<String, dynamic>>();
+      mosques[0]['notes'] = 'tampered after export';
+
+      final tamperedJson = jsonEncode(decoded);
+
+      expect(
+        () => sourceBackupService.previewJson(tamperedJson),
+        throwsA(isA<BackupFormatException>()),
+      );
+      await expectLater(
+        destinationBackupService.importFromJson(tamperedJson),
+        throwsA(isA<BackupFormatException>()),
+      );
+    },
+  );
+
   test(
     'imported backups with invalid timezone values fall back safely',
     () async {
@@ -218,6 +264,7 @@ void main() {
           jsonDecode(coordinatesRow['value'] as String) as Map<String, dynamic>;
       coordinatesPayload['timezoneName'] = 'Mars/Olympus';
       coordinatesRow['value'] = jsonEncode(coordinatesPayload);
+      decoded.remove('integrity');
 
       await destinationBackupService.importFromJson(jsonEncode(decoded));
       final loadedConfig = await SettingsRepository(
