@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:isolate';
 
 import 'package:drift/drift.dart';
 
@@ -20,8 +21,17 @@ class BackupService {
         : jsonEncode(payload);
   }
 
+  Future<BackupPreview> previewJsonAsync(String json) async {
+    final payload = await Isolate.run(() => _decodeBackupPayload(json));
+    return _buildPreview(payload);
+  }
+
   BackupPreview previewJson(String json) {
-    final payload = _decodePayload(json);
+    final payload = _decodeBackupPayload(json);
+    return _buildPreview(payload);
+  }
+
+  BackupPreview _buildPreview(Map<String, dynamic> payload) {
     final backupSchemaVersion = _readInt(payload, 'backupSchemaVersion');
     if (backupSchemaVersion != kBackupSchemaVersion) {
       throw BackupFormatException(
@@ -49,8 +59,8 @@ class BackupService {
   }
 
   Future<ImportResult> importFromJson(String json) async {
-    final payload = _decodePayload(json);
-    final preview = previewJson(json);
+    final payload = await Isolate.run(() => _decodeBackupPayload(json));
+    final preview = _buildPreview(payload);
     final data = _readMap(payload, 'data');
 
     final appSettingsEntries = _readList(
@@ -294,18 +304,6 @@ class BackupService {
       },
     };
   }
-
-  Map<String, dynamic> _decodePayload(String json) {
-    try {
-      final decoded = jsonDecode(json);
-      if (decoded is! Map) {
-        throw BackupFormatException('Backup JSON must be an object.');
-      }
-      return decoded.map((key, value) => MapEntry(key.toString(), value));
-    } on FormatException catch (error) {
-      throw BackupFormatException('Invalid JSON: ${error.message}');
-    }
-  }
 }
 
 class BackupPreview {
@@ -364,6 +362,30 @@ class BackupFormatException implements Exception {
 }
 
 const kBackupSchemaVersion = 1;
+const kMaxBackupCharacters = 2 * 1024 * 1024;
+
+Map<String, dynamic> _decodeBackupPayload(String json) {
+  final trimmed = json.trim();
+  if (trimmed.isEmpty) {
+    throw BackupFormatException('Backup JSON cannot be empty.');
+  }
+  if (trimmed.length > kMaxBackupCharacters) {
+    throw BackupFormatException(
+      'Backup JSON is too large for the current copy/paste flow. '
+      'Keep it under ${kMaxBackupCharacters ~/ 1024} KB.',
+    );
+  }
+
+  try {
+    final decoded = jsonDecode(trimmed);
+    if (decoded is! Map) {
+      throw BackupFormatException('Backup JSON must be an object.');
+    }
+    return decoded.map((key, value) => MapEntry(key.toString(), value));
+  } on FormatException catch (error) {
+    throw BackupFormatException('Invalid JSON: ${error.message}');
+  }
+}
 
 Map<String, dynamic> _mapValue(Object? value) {
   if (value is Map<String, dynamic>) {

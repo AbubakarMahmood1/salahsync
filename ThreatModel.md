@@ -70,9 +70,9 @@
 
 &#x20;  - Surface: Copy/paste JSON import; untrusted payloads can replace the entire DB.
 
-&#x20;  - Mitigations: schema version checks, strict type validation (`\_read\*` helpers), parsing errors surfaced to the user, transactional import to avoid partial writes, and preview/confirmation dialogs.
+&#x20;  - Mitigations: schema version checks, strict type validation (`\_read\*` helpers), a maximum copy/paste backup size limit, parsing errors surfaced to the user, asynchronous preview parsing to reduce UI stalls, transactional import to avoid partial writes, and preview/confirmation dialogs.
 
-&#x20;  - Gaps: no cryptographic integrity or authenticity, no size limits, and clipboard usage can leak sensitive data to other apps.
+&#x20;  - Gaps: no cryptographic integrity or authenticity, and clipboard usage can leak sensitive data to other apps despite the in-app warning and manual clear option.
 
 
 

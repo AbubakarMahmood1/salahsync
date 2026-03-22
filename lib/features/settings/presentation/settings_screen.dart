@@ -1152,6 +1152,17 @@ class _BackupExportDialog extends StatelessWidget {
               'Copy this JSON to move your local data to another device or keep a personal backup snapshot.',
             ),
             const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Text(
+                'Sensitive data warning: copying exports to the system clipboard can expose mosque notes, coordinates, and logs to keyboards or clipboard-manager apps.',
+              ),
+            ),
+            const SizedBox(height: 12),
             Flexible(
               child: TextField(
                 controller: controller,
@@ -1171,6 +1182,19 @@ class _BackupExportDialog extends StatelessWidget {
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Close'),
+        ),
+        OutlinedButton.icon(
+          onPressed: () async {
+            await Clipboard.setData(const ClipboardData(text: ''));
+            if (!context.mounted) {
+              return;
+            }
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('Clipboard cleared.')));
+          },
+          icon: const Icon(Icons.delete_outline_rounded),
+          label: const Text('Clear Clipboard'),
         ),
         FilledButton.icon(
           onPressed: () async {
@@ -1267,17 +1291,32 @@ class _BackupImportDialogState extends State<_BackupImportDialog> {
     );
   }
 
-  void _validate() {
+  Future<void> _validate() async {
+    setState(() {
+      _isWorking = true;
+      _error = null;
+    });
+
     try {
-      final preview = widget.backupService.previewJson(_controller.text.trim());
+      final preview = await widget.backupService.previewJsonAsync(
+        _controller.text.trim(),
+      );
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _preview = preview;
         _error = null;
+        _isWorking = false;
       });
     } catch (error) {
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _preview = null;
         _error = error.toString();
+        _isWorking = false;
       });
     }
   }

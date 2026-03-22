@@ -178,6 +178,28 @@ void main() {
     );
   });
 
+  test('previewJson rejects oversized payloads', () {
+    final payload = jsonEncode({
+      'backupSchemaVersion': 1,
+      'databaseSchemaVersion': 2,
+      'exportedAt': '2026-03-22T00:00:00Z',
+      'padding': 'a' * kMaxBackupCharacters,
+      'data': {
+        'appSettingsEntries': <Object>[],
+        'mosques': <Object>[],
+        'timingRuleEntries': <Object>[],
+        'ibadahTaskEntries': <Object>[],
+        'ibadahCompletionEntries': <Object>[],
+        'prayerLogEntries': <Object>[],
+      },
+    });
+
+    expect(
+      () => sourceBackupService.previewJson(payload),
+      throwsA(isA<BackupFormatException>()),
+    );
+  });
+
   test(
     'imported backups with invalid timezone values fall back safely',
     () async {
