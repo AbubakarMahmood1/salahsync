@@ -94,6 +94,7 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
   late AppThemeMode _themeMode;
   late _RamadanOverrideChoice _ramadanOverride;
   late Map<SalahPrayer, PrayerNotificationPreference> _notificationPreferences;
+  late NotificationPrivacyMode _notificationPrivacyMode;
   late bool _sehriEnabled;
   late bool _iftarEnabled;
   bool _isSaving = false;
@@ -467,6 +468,37 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
                     ),
                     validator: _nonNegativeIntValidator,
                   ),
+                  const SizedBox(height: 14),
+                  DropdownButtonFormField<NotificationPrivacyMode>(
+                    key: ValueKey(_notificationPrivacyMode),
+                    initialValue: _notificationPrivacyMode,
+                    decoration: const InputDecoration(
+                      labelText: 'Lock-screen privacy',
+                    ),
+                    items: NotificationPrivacyMode.values
+                        .map(
+                          (mode) => DropdownMenuItem(
+                            value: mode,
+                            child: Text(mode.label),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) {
+                        return;
+                      }
+                      setState(() {
+                        _notificationPrivacyMode = value;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Prayer name only removes mosque names and exact schedule text from notification content so lock-screen previews stay less revealing.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
                   const SizedBox(height: 18),
                   Text(
                     'Per-prayer toggles',
@@ -645,6 +677,7 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
       for (final prayer in kNotificationPreferencePrayers)
         prayer: preferences.forPrayer(prayer),
     };
+    _notificationPrivacyMode = preferences.privacyMode;
     _reminderOffsetController.text = preferences.reminderOffsetMinutes
         .toString();
     _sehriEnabled = preferences.sehriEnabled;
@@ -657,6 +690,7 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
       reminderOffsetMinutes: int.parse(_reminderOffsetController.text.trim()),
       sehriEnabled: _sehriEnabled,
       iftarEnabled: _iftarEnabled,
+      privacyMode: _notificationPrivacyMode,
     );
   }
 

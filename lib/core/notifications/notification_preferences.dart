@@ -1,5 +1,14 @@
 import '../time/salah_prayer.dart';
 
+enum NotificationPrivacyMode {
+  fullDetails('Full details'),
+  prayerNameOnly('Prayer name only');
+
+  const NotificationPrivacyMode(this.label);
+
+  final String label;
+}
+
 class PrayerNotificationPreference {
   const PrayerNotificationPreference({
     this.adhanEnabled = false,
@@ -58,6 +67,7 @@ class NotificationPreferences {
     required this.reminderOffsetMinutes,
     required this.sehriEnabled,
     required this.iftarEnabled,
+    required this.privacyMode,
   }) : perPrayer = Map.unmodifiable(perPrayer);
 
   factory NotificationPreferences.defaults() {
@@ -69,6 +79,7 @@ class NotificationPreferences {
       reminderOffsetMinutes: 15,
       sehriEnabled: false,
       iftarEnabled: false,
+      privacyMode: NotificationPrivacyMode.fullDetails,
     );
   }
 
@@ -76,6 +87,7 @@ class NotificationPreferences {
   final int reminderOffsetMinutes;
   final bool sehriEnabled;
   final bool iftarEnabled;
+  final NotificationPrivacyMode privacyMode;
 
   PrayerNotificationPreference forPrayer(SalahPrayer prayer) {
     return perPrayer[prayer] ?? const PrayerNotificationPreference();
@@ -86,6 +98,7 @@ class NotificationPreferences {
     int? reminderOffsetMinutes,
     bool? sehriEnabled,
     bool? iftarEnabled,
+    NotificationPrivacyMode? privacyMode,
   }) {
     return NotificationPreferences(
       perPrayer: perPrayer ?? this.perPrayer,
@@ -93,6 +106,7 @@ class NotificationPreferences {
           reminderOffsetMinutes ?? this.reminderOffsetMinutes,
       sehriEnabled: sehriEnabled ?? this.sehriEnabled,
       iftarEnabled: iftarEnabled ?? this.iftarEnabled,
+      privacyMode: privacyMode ?? this.privacyMode,
     );
   }
 
@@ -105,6 +119,7 @@ class NotificationPreferences {
       'reminderOffsetMinutes': reminderOffsetMinutes,
       'sehriEnabled': sehriEnabled,
       'iftarEnabled': iftarEnabled,
+      'privacyMode': privacyMode.name,
     };
   }
 
@@ -145,6 +160,11 @@ class NotificationPreferences {
         json['iftarEnabled'],
         fallback: defaults.iftarEnabled,
       ),
+      privacyMode: _enumFromJson(
+        json['privacyMode'],
+        values: NotificationPrivacyMode.values,
+        fallback: defaults.privacyMode,
+      ),
     );
   }
 
@@ -153,6 +173,7 @@ class NotificationPreferences {
       reminderOffsetMinutes.toString(),
       sehriEnabled.toString(),
       iftarEnabled.toString(),
+      privacyMode.name,
     ];
     for (final prayer in kNotificationPreferencePrayers) {
       final preference = forPrayer(prayer);
@@ -162,6 +183,21 @@ class NotificationPreferences {
     }
     return segments.join('|');
   }
+}
+
+T _enumFromJson<T extends Enum>(
+  Object? value, {
+  required List<T> values,
+  required T fallback,
+}) {
+  if (value is String) {
+    for (final candidate in values) {
+      if (candidate.name == value) {
+        return candidate;
+      }
+    }
+  }
+  return fallback;
 }
 
 const List<SalahPrayer> kNotificationPreferencePrayers = [

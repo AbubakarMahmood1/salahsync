@@ -98,6 +98,7 @@ void main() {
       reminderOffsetMinutes: 20,
       sehriEnabled: true,
       iftarEnabled: true,
+      privacyMode: NotificationPrivacyMode.prayerNameOnly,
     );
 
     await repository.saveNotificationPreferences(preferences);
@@ -106,6 +107,7 @@ void main() {
     expect(loaded.reminderOffsetMinutes, 20);
     expect(loaded.sehriEnabled, isTrue);
     expect(loaded.iftarEnabled, isTrue);
+    expect(loaded.privacyMode, NotificationPrivacyMode.prayerNameOnly);
     expect(loaded.forPrayer(SalahPrayer.fajr).reminderEnabled, isTrue);
     expect(loaded.forPrayer(SalahPrayer.jummah).jamaatEnabled, isTrue);
     expect(loaded.forPrayer(SalahPrayer.asr).adhanEnabled, isFalse);

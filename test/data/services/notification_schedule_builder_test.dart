@@ -206,6 +206,65 @@ void main() {
     );
   });
 
+  test(
+    'buildWindow redacts lock-screen content when privacy mode is enabled',
+    () {
+      final preferences = NotificationPreferences.defaults().copyWith(
+        perPrayer: {
+          for (final prayer in kNotificationPreferencePrayers)
+            prayer: const PrayerNotificationPreference(),
+          SalahPrayer.fajr: const PrayerNotificationPreference(
+            adhanEnabled: true,
+            reminderEnabled: true,
+            jamaatEnabled: true,
+          ),
+        },
+        reminderOffsetMinutes: 15,
+        privacyMode: NotificationPrivacyMode.prayerNameOnly,
+      );
+      final rules = [
+        TimingRule.offset(
+          prayer: SalahPrayer.fajr,
+          offsetMinutes: 25,
+          priority: 1,
+        ),
+      ];
+      final now = tz.TZDateTime(
+        tz.getLocation(config.timezoneName),
+        2026,
+        3,
+        27,
+        0,
+      );
+
+      final plans = builder.buildWindow(
+        now: now,
+        config: config,
+        notificationMosque: mosque,
+        rules: rules,
+        preferences: preferences,
+      );
+
+      final reminder = plans.firstWhere(
+        (plan) =>
+            plan.prayer == SalahPrayer.fajr &&
+            plan.kind == NotificationKind.reminder,
+      );
+      final jamaat = plans.firstWhere(
+        (plan) =>
+            plan.prayer == SalahPrayer.fajr &&
+            plan.kind == NotificationKind.jamaat,
+      );
+
+      expect(reminder.title, 'Fajr reminder');
+      expect(reminder.body, 'Open SalahSync for details.');
+      expect(jamaat.title, 'Fajr alert');
+      expect(jamaat.body, 'Open SalahSync for details.');
+      expect(reminder.body.contains(mosque.name), isFalse);
+      expect(jamaat.body.contains('25'), isFalse);
+    },
+  );
+
   test('buildWindow falls back safely for invalid timezone names', () {
     final invalidTimezoneConfig = config.copyWith(timezoneName: 'Mars/Olympus');
     final preferences = NotificationPreferences.defaults().copyWith(

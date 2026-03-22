@@ -100,9 +100,9 @@
 
 &#x20;  - Surface: scheduling local notifications with user-provided strings and times, background refresh dispatcher.
 
-&#x20;  - Mitigations: permission checks, safe fallback for missing plugins, limiting the scheduled window to 50 notifications, managed payload prefix for cleanup, non-exported receivers in AndroidManifest.
+&#x20;  - Mitigations: permission checks, safe fallback for missing plugins, limiting the scheduled window to 50 notifications, managed payload prefix for cleanup, non-exported receivers in AndroidManifest, and an optional lock-screen privacy mode that redacts mosque names and exact schedule text from notification content.
 
-&#x20;  - Gaps: malformed data can still produce misleading schedules; notifications may appear on lock screens and leak mosque names/notes.
+&#x20;  - Gaps: malformed data can still produce misleading schedules; if the user keeps full-detail notifications enabled, lock-screen previews can still reveal prayer timing context.
 
 
 

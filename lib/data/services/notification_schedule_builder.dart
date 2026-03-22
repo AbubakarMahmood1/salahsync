@@ -110,14 +110,21 @@ class NotificationScheduleBuilder {
       final adhanTime = snapshot.timeOf(computedPrayer);
 
       if (preference.adhanEnabled) {
+        final content = _buildContent(
+          kind: NotificationKind.adhan,
+          prayer: prayer,
+          preferences: preferences,
+          fullTitle: '${prayer.label} Adhan',
+          fullBody: 'Prayer time starts at ${_formatTime(adhanTime)}.',
+        );
         plans.add(
           ScheduledNotificationPlan.create(
             mosqueId: notificationMosque.id,
             prayer: prayer,
             kind: NotificationKind.adhan,
             scheduledAt: adhanTime,
-            title: '${prayer.label} Adhan',
-            body: 'Prayer time starts at ${_formatTime(adhanTime)}.',
+            title: content.title,
+            body: content.body,
           ),
         );
       }
@@ -131,29 +138,43 @@ class NotificationScheduleBuilder {
         final reminderTime = resolvedTiming.dateTime.subtract(
           Duration(minutes: preferences.reminderOffsetMinutes),
         );
+        final content = _buildContent(
+          kind: NotificationKind.reminder,
+          prayer: prayer,
+          preferences: preferences,
+          fullTitle: '${prayer.label} reminder',
+          fullBody:
+              '${preferences.reminderOffsetMinutes} min before Jamaat at ${_formatTime(resolvedTiming.dateTime)} in ${notificationMosque.name}.',
+        );
         plans.add(
           ScheduledNotificationPlan.create(
             mosqueId: notificationMosque.id,
             prayer: prayer,
             kind: NotificationKind.reminder,
             scheduledAt: reminderTime,
-            title: '${prayer.label} reminder',
-            body:
-                '${preferences.reminderOffsetMinutes} min before Jamaat at ${_formatTime(resolvedTiming.dateTime)} in ${notificationMosque.name}.',
+            title: content.title,
+            body: content.body,
           ),
         );
       }
 
       if (preference.jamaatEnabled) {
+        final content = _buildContent(
+          kind: NotificationKind.jamaat,
+          prayer: prayer,
+          preferences: preferences,
+          fullTitle: '${prayer.label} Jamaat',
+          fullBody:
+              '${notificationMosque.name} at ${_formatTime(resolvedTiming.dateTime)}.',
+        );
         plans.add(
           ScheduledNotificationPlan.create(
             mosqueId: notificationMosque.id,
             prayer: prayer,
             kind: NotificationKind.jamaat,
             scheduledAt: resolvedTiming.dateTime,
-            title: '${prayer.label} Jamaat',
-            body:
-                '${notificationMosque.name} at ${_formatTime(resolvedTiming.dateTime)}.',
+            title: content.title,
+            body: content.body,
           ),
         );
       }
@@ -176,9 +197,40 @@ class NotificationScheduleBuilder {
     return plans;
   }
 
+  _NotificationContent _buildContent({
+    required NotificationKind kind,
+    required SalahPrayer prayer,
+    required NotificationPreferences preferences,
+    required String fullTitle,
+    required String fullBody,
+  }) {
+    if (preferences.privacyMode == NotificationPrivacyMode.fullDetails) {
+      return _NotificationContent(title: fullTitle, body: fullBody);
+    }
+
+    final title = switch (kind) {
+      NotificationKind.adhan => '${prayer.label} alert',
+      NotificationKind.reminder => '${prayer.label} reminder',
+      NotificationKind.jamaat => '${prayer.label} alert',
+      NotificationKind.sehri => 'Sehri alert',
+      NotificationKind.iftar => 'Iftar alert',
+    };
+    return _NotificationContent(
+      title: title,
+      body: 'Open SalahSync for details.',
+    );
+  }
+
   String _formatTime(DateTime value) {
     final hour = value.hour.toString().padLeft(2, '0');
     final minute = value.minute.toString().padLeft(2, '0');
     return '$hour:$minute';
   }
+}
+
+class _NotificationContent {
+  const _NotificationContent({required this.title, required this.body});
+
+  final String title;
+  final String body;
 }
