@@ -221,6 +221,8 @@ void main() {
         },
         reminderOffsetMinutes: 15,
         privacyMode: NotificationPrivacyMode.prayerNameOnly,
+        sehriEnabled: true,
+        iftarEnabled: true,
       );
       final rules = [
         TimingRule.offset(
@@ -255,13 +257,25 @@ void main() {
             plan.prayer == SalahPrayer.fajr &&
             plan.kind == NotificationKind.jamaat,
       );
+      final sehri = plans.firstWhere(
+        (plan) => plan.kind == NotificationKind.sehri,
+      );
+      final iftar = plans.firstWhere(
+        (plan) => plan.kind == NotificationKind.iftar,
+      );
 
       expect(reminder.title, 'Fajr reminder');
       expect(reminder.body, 'Open SalahSync for details.');
       expect(jamaat.title, 'Fajr alert');
       expect(jamaat.body, 'Open SalahSync for details.');
+      expect(sehri.title, 'Sehri alert');
+      expect(sehri.body, 'Open SalahSync for details.');
+      expect(iftar.title, 'Iftar alert');
+      expect(iftar.body, 'Open SalahSync for details.');
       expect(reminder.body.contains(mosque.name), isFalse);
       expect(jamaat.body.contains('25'), isFalse);
+      expect(sehri.body.contains('Imsak'), isFalse);
+      expect(iftar.body.contains('Maghrib'), isFalse);
     },
   );
 

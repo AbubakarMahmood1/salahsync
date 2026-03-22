@@ -18,8 +18,8 @@ Implemented so far:
 - Local notification scheduling with a rolling 48-hour window, permissions, and exact-alarm fallback
 - Notification runtime diagnostics, manual 48-hour window rebuild, and battery-optimization guidance
 - Persisted theme mode (`system`, `light`, `dark`)
-- JSON backup export/import for the local drift database from Settings
-- Passphrase-protected backup exports/imports with file-share and file-import flows
+- Protected backup export/import for the local drift database from Settings
+- Passphrase-protected backup exports, legacy plaintext import compatibility, and file-share/file-import flows
 - Release validation notes mapped to the SRS checklist in `docs/release-validation.md`
 - Unit and widget tests for core domain logic, persistence, scheduling, and the app shell
 

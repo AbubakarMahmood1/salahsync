@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'backup_service.dart';
+
 class BackupFileTransferService {
   BackupFileTransferService({
     Future<Directory> Function()? tempDirectoryProvider,
@@ -32,7 +34,15 @@ class BackupFileTransferService {
   }
 
   Future<String> readBackupFile(String path) async {
-    return File(path).readAsString();
+    final file = File(path);
+    final fileLength = await file.length();
+    if (fileLength > kMaxBackupCharacters) {
+      throw BackupFormatException(
+        'Backup file is too large for the current import flow. '
+        'Keep it under ${kMaxBackupCharacters ~/ 1024} KB.',
+      );
+    }
+    return file.readAsString();
   }
 
   String _formatTimestamp(DateTime value) {

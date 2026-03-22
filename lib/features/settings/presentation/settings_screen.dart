@@ -600,7 +600,7 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'Export the local database as a backup file or JSON, and import a prior SalahSync backup from file or pasted text. Import always replaces the current local database.',
+                    'Export the local database as a passphrase-protected backup, and import a prior SalahSync backup from file or pasted text. Legacy plaintext backups can still be imported. Import always replaces the current local database.',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: scheme.onSurfaceVariant,
                     ),
@@ -952,6 +952,11 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
 
     try {
       final normalizedPassphrase = normalizeBackupPassphraseInput(passphrase);
+      if (normalizedPassphrase == null) {
+        throw BackupFormatException(
+          'Protected exports require a backup passphrase.',
+        );
+      }
       final json = await ref
           .read(backupServiceProvider)
           .exportToJson(pretty: true, passphrase: normalizedPassphrase);
@@ -967,7 +972,6 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
               backupFileTransferServiceProvider,
             ),
             json: json,
-            isEncrypted: normalizedPassphrase != null,
           );
         },
       );
@@ -1266,7 +1270,7 @@ class _BackupPassphraseDialogState extends State<_BackupPassphraseDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Protect backup export?'),
+      title: const Text('Protect backup export'),
       content: SizedBox(
         width: 520,
         child: Column(
@@ -1274,7 +1278,7 @@ class _BackupPassphraseDialogState extends State<_BackupPassphraseDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Leave this blank to export readable JSON, or set a passphrase to encrypt the backup before copying it.',
+              'Backup exports now require a passphrase. SalahSync encrypts the JSON before you copy or share it.',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 12),
@@ -1286,7 +1290,7 @@ class _BackupPassphraseDialogState extends State<_BackupPassphraseDialog> {
               decoration: InputDecoration(
                 labelText: 'Backup passphrase',
                 helperText:
-                    'Optional. Use at least $kMinBackupPassphraseLength characters for protected exports.',
+                    'Use at least $kMinBackupPassphraseLength characters.',
                 errorText: _error,
                 suffixIcon: IconButton(
                   onPressed: () {
@@ -1314,10 +1318,6 @@ class _BackupPassphraseDialogState extends State<_BackupPassphraseDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        OutlinedButton(
-          onPressed: () => Navigator.of(context).pop(''),
-          child: const Text('Skip Encryption'),
-        ),
         FilledButton(
           onPressed: _protectExport,
           child: const Text('Protect Export'),
@@ -1331,7 +1331,7 @@ class _BackupPassphraseDialogState extends State<_BackupPassphraseDialog> {
       final normalized = normalizeBackupPassphraseInput(_controller.text);
       if (normalized == null) {
         setState(() {
-          _error = 'Enter a passphrase or use Skip Encryption.';
+          _error = 'Enter a backup passphrase.';
         });
         return;
       }
@@ -1348,12 +1348,10 @@ class _BackupExportDialog extends StatelessWidget {
   const _BackupExportDialog({
     required this.backupFileTransferService,
     required this.json,
-    required this.isEncrypted,
   });
 
   final BackupFileTransferService backupFileTransferService;
   final String json;
-  final bool isEncrypted;
 
   @override
   Widget build(BuildContext context) {
@@ -1367,10 +1365,8 @@ class _BackupExportDialog extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              isEncrypted
-                  ? 'Copy this passphrase-protected backup to move your local data to another device or keep a protected snapshot. Keep the JSON and passphrase separate.'
-                  : 'Copy this JSON to move your local data to another device or keep a personal backup snapshot. Exports include an unsigned checksum so later imports can detect corruption during copy/paste.',
+            const Text(
+              'Copy or share this passphrase-protected backup to move your local data to another device or keep a protected snapshot. Keep the JSON and passphrase separate.',
             ),
             const SizedBox(height: 12),
             Container(
@@ -1379,10 +1375,8 @@ class _BackupExportDialog extends StatelessWidget {
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: Text(
-                isEncrypted
-                    ? 'Clipboard warning: this copied blob is encrypted, but anyone with both the JSON and the passphrase can still restore your data.'
-                    : 'Sensitive data warning: copying exports to the system clipboard can expose mosque notes, coordinates, and logs to keyboards or clipboard-manager apps.',
+              child: const Text(
+                'Clipboard warning: this copied blob is encrypted, but anyone with both the JSON and the passphrase can still restore your data.',
               ),
             ),
             const SizedBox(height: 12),
@@ -1392,10 +1386,8 @@ class _BackupExportDialog extends StatelessWidget {
                 readOnly: true,
                 maxLines: 16,
                 minLines: 8,
-                decoration: InputDecoration(
-                  labelText: isEncrypted
-                      ? 'Encrypted backup JSON'
-                      : 'Backup JSON',
+                decoration: const InputDecoration(
+                  labelText: 'Encrypted backup JSON',
                   alignLabelWithHint: true,
                 ),
               ),
@@ -1413,7 +1405,7 @@ class _BackupExportDialog extends StatelessWidget {
             try {
               final staged = await backupFileTransferService.stageBackupFile(
                 json,
-                encrypted: isEncrypted,
+                encrypted: true,
               );
               final result = await SharePlus.instance.share(
                 ShareParams(
@@ -1426,9 +1418,8 @@ class _BackupExportDialog extends StatelessWidget {
                   ],
                   title: 'SalahSync backup',
                   subject: 'SalahSync backup',
-                  text: isEncrypted
-                      ? 'SalahSync protected backup file. Keep the passphrase separate from the JSON file.'
-                      : 'SalahSync backup file.',
+                  text:
+                      'SalahSync protected backup file. Keep the passphrase separate from the JSON file.',
                 ),
               );
               if (!context.mounted) {
@@ -1476,13 +1467,7 @@ class _BackupExportDialog extends StatelessWidget {
               return;
             }
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  isEncrypted
-                      ? 'Encrypted backup JSON copied.'
-                      : 'Backup JSON copied.',
-                ),
-              ),
+              const SnackBar(content: Text('Encrypted backup JSON copied.')),
             );
           },
           icon: const Icon(Icons.copy_rounded),

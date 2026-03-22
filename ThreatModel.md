@@ -10,7 +10,7 @@
 
 &#x20; - Local notification scheduling with `flutter\_local\_notifications` and background refresh via `workmanager` (`lib/data/services/notification\_sync\_service.dart`, `lib/notifications/background\_refresh.dart`).
 
-&#x20; - JSON backup import/export via copy/paste (`lib/data/services/backup\_service.dart`, Settings UI).
+&#x20; - JSON backup import/export via protected copy/share flows plus file import (`lib/data/services/backup\_service.dart`, Settings UI).
 
 \- There is no backend, networking, or authentication; data is local to the device. The main assets are the integrity of prayer schedules/notifications and confidentiality of stored mosque notes, coordinates, and any prayer log or ibadah data.
 
@@ -70,9 +70,9 @@
 
 &#x20;  - Surface: Copy/paste JSON import; untrusted payloads can replace the entire DB.
 
-&#x20;  - Mitigations: schema version checks, strict type validation (`\_read\*` helpers), a maximum copy/paste backup size limit, parsing errors surfaced to the user, asynchronous preview parsing to reduce UI stalls, optional passphrase-protected AES-256-GCM exports/imports for confidentiality and authenticated decryption, unsigned SHA-256 checksum metadata on plaintext exports to detect corruption or naive tampering during copy/paste, temporary file staging plus file-based share/import to reduce clipboard dependence, transactional import to avoid partial writes, and preview/confirmation dialogs.
+&#x20;  - Mitigations: schema version checks, strict type validation (`\_read\*` helpers), a maximum copy/paste backup size limit, a pre-read file-size limit for file imports, parsing errors surfaced to the user, asynchronous preview parsing to reduce UI stalls, passphrase-protected AES-256-GCM exports/imports for confidentiality and authenticated decryption, unsigned SHA-256 checksum metadata on plaintext legacy backups to detect corruption or naive tampering during copy/paste, temporary file staging plus file-based share/import to reduce clipboard dependence, transactional import to avoid partial writes, and preview/confirmation dialogs.
 
-&#x20;  - Gaps: protected backups are only as strong as the user-chosen passphrase, plaintext export remains available for compatibility, checksum metadata is not a signature and offers no real authenticity against an attacker who can recompute it, and clipboard usage can still leak either plaintext backups or encrypted blobs when the copy path is used.
+&#x20;  - Gaps: protected backups are only as strong as the user-chosen passphrase, legacy plaintext backups can still be imported, checksum metadata is not a signature and offers no real authenticity against an attacker who can recompute it, and clipboard usage can still leak encrypted blobs when the copy path is used.
 
 
 
@@ -100,7 +100,7 @@
 
 &#x20;  - Surface: scheduling local notifications with user-provided strings and times, background refresh dispatcher.
 
-&#x20;  - Mitigations: permission checks, safe fallback for missing plugins, limiting the scheduled window to 50 notifications, managed payload prefix for cleanup, non-exported receivers in AndroidManifest, and an optional lock-screen privacy mode that redacts mosque names and exact schedule text from notification content.
+&#x20;  - Mitigations: permission checks, safe fallback for missing plugins, limiting the scheduled window to 50 notifications, managed payload prefix for cleanup, non-exported receivers in AndroidManifest, and an optional lock-screen privacy mode that redacts mosque names and exact schedule text from notification content, including Sehri and Iftar alerts.
 
 &#x20;  - Gaps: malformed data can still produce misleading schedules; if the user keeps full-detail notifications enabled, lock-screen previews can still reveal prayer timing context.
 
@@ -130,7 +130,7 @@
 
 \- \*\*Malicious backup\*\*: A user imports a backup received from the internet. It contains misleading mosque names or extreme offsets that spam notifications or skew schedules. New exports include checksum metadata that can catch corruption or unsophisticated edits, but backups are still unauthenticated and can fully replace the DB if an attacker recomputes the checksum. Impact is mainly integrity/availability; confidentiality is affected if the backup is exported back out.
 
-\- \*\*Clipboard exfiltration\*\*: After exporting a JSON backup, another app reads the clipboard and exfiltrates mosque details or prayer logs. Passphrase-protected exports reduce this exposure if the passphrase is kept separate, but plaintext exports and weak/shared passphrases still leave a privacy risk.
+\- \*\*Clipboard exfiltration\*\*: After exporting a backup, another app reads the clipboard and captures the encrypted blob. Passphrase-protected exports reduce direct data exposure if the passphrase is kept separate, but weak/shared passphrases still leave a privacy risk.
 
 \- \*\*Device compromise/physical access\*\*: An attacker with rooted access extracts `salahsync.sqlite` to learn mosque attendance patterns or prayer logs. The app relies on OS encryption and has no app-level at‑rest protection.
 

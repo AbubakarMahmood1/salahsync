@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:salahsync/data/services/backup_file_transfer_service.dart';
+import 'package:salahsync/data/services/backup_service.dart';
 
 void main() {
   late Directory tempDirectory;
@@ -60,5 +61,20 @@ void main() {
     final json = await service.readBackupFile(file.path);
 
     expect(json, '{"backupSchemaVersion":1}');
+  });
+
+  test('readBackupFile rejects oversized files before decoding them', () async {
+    final file = File(
+      '${tempDirectory.path}${Platform.pathSeparator}oversized.json',
+    );
+    await file.writeAsString('a' * (kMaxBackupCharacters + 1), flush: true);
+    final service = BackupFileTransferService(
+      tempDirectoryProvider: () async => tempDirectory,
+    );
+
+    await expectLater(
+      service.readBackupFile(file.path),
+      throwsA(isA<BackupFormatException>()),
+    );
   });
 }

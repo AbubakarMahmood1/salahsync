@@ -86,14 +86,21 @@ class NotificationScheduleBuilder {
 
     if (snapshot.isRamadanActive && preferences.sehriEnabled) {
       final imsakTime = snapshot.timeOf(SalahPrayer.imsak);
+      final content = _buildContent(
+        kind: NotificationKind.sehri,
+        prayer: SalahPrayer.imsak,
+        preferences: preferences,
+        fullTitle: 'Sehri ends soon',
+        fullBody: 'Imsak is at ${_formatTime(imsakTime)}.',
+      );
       plans.add(
         ScheduledNotificationPlan.create(
           mosqueId: notificationMosque.id,
           prayer: SalahPrayer.imsak,
           kind: NotificationKind.sehri,
           scheduledAt: imsakTime,
-          title: 'Sehri ends soon',
-          body: 'Imsak is at ${_formatTime(imsakTime)}.',
+          title: content.title,
+          body: content.body,
         ),
       );
     }
@@ -182,14 +189,21 @@ class NotificationScheduleBuilder {
 
     if (snapshot.isRamadanActive && preferences.iftarEnabled) {
       final maghribTime = snapshot.timeOf(SalahPrayer.maghrib);
+      final content = _buildContent(
+        kind: NotificationKind.iftar,
+        prayer: SalahPrayer.maghrib,
+        preferences: preferences,
+        fullTitle: 'Iftar time',
+        fullBody: 'Maghrib is at ${_formatTime(maghribTime)}.',
+      );
       plans.add(
         ScheduledNotificationPlan.create(
           mosqueId: notificationMosque.id,
           prayer: SalahPrayer.maghrib,
           kind: NotificationKind.iftar,
           scheduledAt: maghribTime,
-          title: 'Iftar time',
-          body: 'Maghrib is at ${_formatTime(maghribTime)}.',
+          title: content.title,
+          body: content.body,
         ),
       );
     }
