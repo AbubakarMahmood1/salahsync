@@ -9,9 +9,10 @@ The repository is now implemented through Milestone 5 from [docs/build-plan.md](
 Implemented so far:
 
 - Flutter app shell with `Today`, `Mosques`, `Compare`, and `Settings` tabs
+- Minimal home dashboard with a live current-time clock, next-prayer countdown, and utility launcher
 - Pure-Dart prayer-time engine wrapper around `adhan_dart`
 - Local Hijri date derivation with override support
-- Qibla bearing calculation
+- Qibla bearing calculation plus a compass-backed Qibla screen with live/saved coordinates
 - Timing-rule model and resolver for offset, fixed, and date-range-fixed rules
 - Drift-backed mosque/settings persistence and seeded data
 - Mosque CRUD, timing-rule editing, and comparison UI
@@ -20,15 +21,19 @@ Implemented so far:
 - Persisted theme mode (`system`, `light`, `dark`)
 - Protected backup export/import for the local drift database from Settings
 - Passphrase-protected backup exports, legacy plaintext import compatibility, and file-share/file-import flows
+- Ibadah planner with recurring tasks, task editor, daily checklist expansion, and tasbih counters
+- Prayer log UI with date navigation, Friday Jummah handling, and weekly/monthly summaries
+- Monthly timetable view with Friday Jummah rows and Ramadan highlighting
+- Manual AlAdhan verification screen using unadjusted engine-vs-API comparison
+- Android home-screen widget support with shared widget sync data and pin-request action
 - Release validation notes mapped to the SRS checklist in `docs/release-validation.md`
 - Unit and widget tests for core domain logic, persistence, scheduling, and the app shell
 
-Not implemented yet:
+Native work still requiring physical-device signoff:
 
-- Ibadah planner and prayer log flows
-- Tasbih counter UI and haptics
-- Monthly timetable, Qibla screen UI, and widgets
-- Optional manual AlAdhan verification tooling
+- Android widget placement/update behavior on a real launcher
+- Qibla compass accuracy and calibration messaging on actual hardware
+- iOS WidgetKit extension creation/signing if you want parity beyond the shared app-group groundwork already added here
 
 ## Tooling
 

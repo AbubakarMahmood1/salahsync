@@ -33,6 +33,7 @@ class _SalahSyncAppState extends ConsumerState<SalahSyncApp>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(syncNotificationsAfterForegroundChange(ref));
+      unawaited(syncHomeWidgetAfterForegroundChange(ref));
     }
   }
 
@@ -41,6 +42,7 @@ class _SalahSyncAppState extends ConsumerState<SalahSyncApp>
     ref.watch(appBootstrapProvider);
     final themeModeAsync = ref.watch(appThemeModeProvider);
     ref.watch(notificationSyncTriggerProvider);
+    ref.watch(homeWidgetSyncTriggerProvider);
 
     return MaterialApp(
       title: 'SalahSync',

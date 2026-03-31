@@ -1,3 +1,4 @@
+import '../../../core/time/geo_coordinates.dart';
 import '../../../core/time/prayer_time_service.dart';
 import '../../../core/time/salah_prayer.dart';
 import '../../../data/models/home_schedule_read_model.dart';
@@ -33,9 +34,22 @@ HomePrayerStatus computeHomePrayerStatus({
   );
   if (nextPrayer == SalahPrayer.fajr &&
       now.isAfter(snapshot.timeOf(SalahPrayer.isha))) {
+    final tomorrowConfig =
+        model.primaryMosque.latitude != null &&
+            model.primaryMosque.longitude != null
+        ? model.calculationConfig.copyWith(
+            locationName: model.primaryMosque.name,
+            coordinates: GeoCoordinates(
+              latitude: model.primaryMosque.latitude!,
+              longitude: model.primaryMosque.longitude!,
+            ),
+          )
+        : model.calculationConfig.copyWith(
+            locationName: model.primaryMosque.name,
+          );
     final tomorrowSnapshot = prayerTimeService.calculateDay(
       date: snapshot.date.add(const Duration(days: 1)),
-      config: model.calculationConfig,
+      config: tomorrowConfig,
     );
     nextPrayerTime = tomorrowSnapshot.timeOf(SalahPrayer.fajr);
   }

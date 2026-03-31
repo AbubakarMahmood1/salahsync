@@ -53,6 +53,8 @@
 	<array>
 		<string>com.salahsync.salahsync.notification.refresh</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>SalahSync uses location only when you ask for live Qibla coordinates.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

@@ -24,6 +24,17 @@ This file tracks the Milestone 5 hardening pass against Section 10.2 of the SRS.
   - Covered in `test/data/services/backup_service_test.dart`
 - Notification count safety cap for the 48-hour window:
   - Covered in `test/data/services/notification_schedule_builder_test.dart`
+- Ibadah task validation and repeat metadata persistence:
+  - Covered in `test/data/repositories/ibadah_task_repository_test.dart`
+- Planner expansion for Friday/Jummah and one-time task completion behavior:
+  - Covered in `test/data/services/ibadah_planner_service_test.dart`
+- Prayer-log persistence and Friday/Jummah read-model behavior:
+  - Covered in `test/data/repositories/prayer_log_repository_test.dart`
+  - Covered in `test/data/services/prayer_log_read_service_test.dart`
+- Manual AlAdhan verification parsing and per-prayer diff computation:
+  - Covered in `test/data/services/aladhan_verification_service_test.dart`
+- Home widget sync payload generation and platform channel update calls:
+  - Covered in `test/data/services/home_widget_sync_service_test.dart`
 
 ## Runtime Hardening Added In Milestone 5
 
@@ -49,5 +60,9 @@ These cannot be completed inside desktop automation and must be run on hardware:
 - Notification rescheduling after reboot
 - Manufacturer battery-management behavior on at least one Xiaomi/HyperOS or Samsung device
 - iOS notification authorization, pending-count behavior, and sound behavior
+- Android home-screen widget placement, refresh cadence, and next-prayer rollover
+- Qibla compass heading accuracy and calibration prompt behavior on at least one Android and one iPhone
+- Live-device check that AlAdhan verification handles network loss and API success cleanly
+- iOS app-group / WidgetKit integration signoff if a native widget extension is added to the Xcode project
 
 Milestone 5 is treated as code-complete once the automated checks pass and the runtime diagnostics above are in place. The items in this section remain release sign-off steps for physical devices.

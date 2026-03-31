@@ -40,6 +40,15 @@ void main() {
     expect(find.text('Compare'), findsOneWidget);
     expect(find.text('Settings'), findsOneWidget);
     expect(find.text('Masjid Al-Noor'), findsOneWidget);
+    expect(find.text('Planner'), findsOneWidget);
+    expect(find.text('Verify'), findsOneWidget);
+
+    await tester.tap(find.text('Planner'));
+    await tester.pumpAndSettle();
+    expect(find.text('Ibadah planner'), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('Mosques'));
     await tester.pumpAndSettle();

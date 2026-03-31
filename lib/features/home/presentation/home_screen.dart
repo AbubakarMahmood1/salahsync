@@ -9,6 +9,12 @@ import '../../../core/mosque/resolved_timing.dart';
 import '../../../core/time/prayer_calculation_config.dart';
 import '../../../core/time/salah_prayer.dart';
 import '../../../data/models/home_schedule_read_model.dart';
+import '../../planner/presentation/planner_screen.dart';
+import '../../planner/presentation/quick_tasbih_screen.dart';
+import '../../prayer_log/presentation/prayer_log_screen.dart';
+import '../../qibla/presentation/qibla_screen.dart';
+import '../../timetable/presentation/monthly_timetable_screen.dart';
+import '../../verification/presentation/aladhan_verification_screen.dart';
 import 'home_prayer_status.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -50,9 +56,11 @@ class HomeScreen extends ConsumerWidget {
               nextPrayerTime: status.nextPrayerTime,
             ),
             const SizedBox(height: 16),
-            _ConfigCard(model: model),
+            const _UtilitiesCard(),
             const SizedBox(height: 16),
             _ScheduleCard(model: model, nextPrayer: status.nextPrayer),
+            const SizedBox(height: 16),
+            _ConfigCard(model: model),
           ],
         );
       },
@@ -110,7 +118,9 @@ class _SummaryCard extends StatelessWidget {
                 ),
               ),
             ],
-            const SizedBox(height: 8),
+            const SizedBox(height: 20),
+            const _LiveClockReadout(),
+            const SizedBox(height: 12),
             Text(
               '${_weekdayName(snapshot.date.weekday)}, ${_monthName(snapshot.date.month)} ${snapshot.date.day}, ${snapshot.date.year}',
               style: Theme.of(context).textTheme.bodyLarge,
@@ -143,11 +153,6 @@ class _SummaryCard extends StatelessWidget {
                   label: 'Countdown',
                   target: nextPrayerTime,
                   tone: scheme.primary,
-                ),
-                _StatusPill(
-                  label: 'Primary',
-                  value: model.primaryMosque.isPrimary ? 'Yes' : 'No',
-                  tone: scheme.secondary,
                 ),
                 _StatusPill(
                   label: 'Qibla',
@@ -201,34 +206,41 @@ class _SummaryCard extends StatelessWidget {
   }
 }
 
-class _ConfigCard extends StatelessWidget {
+class _ConfigCard extends ConsumerWidget {
   const _ConfigCard({required this.model});
 
   final HomeScheduleReadModel model;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final textTheme = Theme.of(context).textTheme;
     final scheme = Theme.of(context).colorScheme;
     final config = model.calculationConfig;
 
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Calculation settings',
-              style: textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+          childrenPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          title: Text(
+            'Profile details',
+            style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          subtitle: Text(
+            'Method, offsets, Hijri profile, and mosque metadata',
+            style: textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
             ),
-            const SizedBox(height: 10),
-            Text(
-              'Today uses the persisted calculation profile and the primary mosque\'s resolved Jamaat rules. Update the method, offsets, or coordinates from the Settings tab.',
-              style: textTheme.bodyMedium?.copyWith(
-                color: scheme.onSurfaceVariant,
+          ),
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Today uses the persisted calculation profile and the primary mosque\'s resolved Jamaat rules.',
+                style: textTheme.bodyMedium?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -245,6 +257,19 @@ class _ConfigCard extends StatelessWidget {
               label: 'Hijri',
               value:
                   '${model.computedSnapshot.hijriDate.weekdayName}, ${model.computedSnapshot.hijriDate.shortLabel}',
+            ),
+            const SizedBox(height: 8),
+            _InfoRow(label: 'Primary', value: model.primaryMosque.name),
+            const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.tonalIcon(
+                onPressed: () {
+                  ref.read(homeWidgetSyncServiceProvider).requestPinWidget();
+                },
+                icon: const Icon(Icons.widgets_rounded),
+                label: const Text('Pin widget'),
+              ),
             ),
           ],
         ),
@@ -509,6 +534,129 @@ class _CountdownPillState extends State<_CountdownPill> {
     final minutes = (duration.inMinutes % 60).toString().padLeft(2, '0');
     final seconds = (duration.inSeconds % 60).toString().padLeft(2, '0');
     return '$hours:$minutes:$seconds';
+  }
+}
+
+class _LiveClockReadout extends StatefulWidget {
+  const _LiveClockReadout();
+
+  @override
+  State<_LiveClockReadout> createState() => _LiveClockReadoutState();
+}
+
+class _LiveClockReadoutState extends State<_LiveClockReadout> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          _formatClock(now),
+          style: Theme.of(context).textTheme.displaySmall?.copyWith(
+            fontWeight: FontWeight.w800,
+            letterSpacing: -1.2,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text('Current time', style: Theme.of(context).textTheme.bodyMedium),
+      ],
+    );
+  }
+
+  String _formatClock(DateTime value) {
+    final hour = value.hour.toString().padLeft(2, '0');
+    final minute = value.minute.toString().padLeft(2, '0');
+    final second = value.second.toString().padLeft(2, '0');
+    return '$hour:$minute:$second';
+  }
+}
+
+class _UtilitiesCard extends StatelessWidget {
+  const _UtilitiesCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final items = [
+      (
+        label: 'Planner',
+        subtitle: 'Today\'s checklist and recurring tasks',
+        icon: Icons.checklist_rounded,
+        builder: const PlannerScreen(),
+      ),
+      (
+        label: 'Prayer Log',
+        subtitle: 'Record Jamaat, alone, or missed prayers',
+        icon: Icons.fact_check_rounded,
+        builder: const PrayerLogScreen(),
+      ),
+      (
+        label: 'Tasbih',
+        subtitle: 'Standalone quick counter',
+        icon: Icons.touch_app_rounded,
+        builder: const QuickTasbihScreen(),
+      ),
+      (
+        label: 'Qibla',
+        subtitle: 'Compass plus numeric bearing',
+        icon: Icons.explore_rounded,
+        builder: const QiblaScreen(),
+      ),
+      (
+        label: 'Timetable',
+        subtitle: 'Monthly prayer times with Friday/Ramadan context',
+        icon: Icons.calendar_month_rounded,
+        builder: const MonthlyTimetableScreen(),
+      ),
+      (
+        label: 'Verify',
+        subtitle: 'Manual AlAdhan comparison',
+        icon: Icons.verified_rounded,
+        builder: const AlAdhanVerificationScreen(),
+      ),
+    ];
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            for (var index = 0; index < items.length; index++) ...[
+              ListTile(
+                leading: Icon(items[index].icon),
+                title: Text(items[index].label),
+                subtitle: Text(items[index].subtitle),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => items[index].builder),
+                  );
+                },
+              ),
+              if (index < items.length - 1) const Divider(height: 1),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }
 
