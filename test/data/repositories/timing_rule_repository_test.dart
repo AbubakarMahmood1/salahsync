@@ -54,6 +54,40 @@ void main() {
     expect(rules.last.prayer, SalahPrayer.maghrib);
   });
 
+  test('listDomainForMosques groups rules by mosque id', () async {
+    final secondMosqueId = await mosqueRepository.save(
+      const MosqueDraft(name: 'Masjid B'),
+    );
+
+    await repository.save(
+      TimingRuleDraft(
+        mosqueId: mosqueId,
+        prayer: SalahPrayer.fajr,
+        mode: TimingRuleMode.offset,
+        offsetMinutes: 10,
+      ),
+    );
+    await repository.save(
+      TimingRuleDraft(
+        mosqueId: secondMosqueId,
+        prayer: SalahPrayer.maghrib,
+        mode: TimingRuleMode.fixed,
+        fixedTime: const TimeOfDayValue(hour: 18, minute: 30),
+      ),
+    );
+
+    final grouped = await repository.listDomainForMosques([
+      mosqueId,
+      secondMosqueId,
+    ]);
+
+    expect(grouped.keys, containsAll([mosqueId, secondMosqueId]));
+    expect(grouped[mosqueId], hasLength(1));
+    expect(grouped[mosqueId]!.single.prayer, SalahPrayer.fajr);
+    expect(grouped[secondMosqueId], hasLength(1));
+    expect(grouped[secondMosqueId]!.single.prayer, SalahPrayer.maghrib);
+  });
+
   test(
     'rejects overlapping date-range rules for the same mosque prayer',
     () async {

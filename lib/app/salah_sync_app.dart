@@ -17,9 +17,6 @@ class SalahSyncApp extends ConsumerStatefulWidget {
 
 class _SalahSyncAppState extends ConsumerState<SalahSyncApp>
     with WidgetsBindingObserver {
-  bool _syncInFlight = false;
-  bool _syncQueued = false;
-
   @override
   void initState() {
     super.initState();
@@ -43,11 +40,7 @@ class _SalahSyncAppState extends ConsumerState<SalahSyncApp>
   Widget build(BuildContext context) {
     ref.watch(appBootstrapProvider);
     final themeModeAsync = ref.watch(appThemeModeProvider);
-    ref.listen<AsyncValue<void>>(notificationSyncTriggerProvider, (_, next) {
-      next.whenData((_) {
-        unawaited(_scheduleNotificationSync(reason: 'data-change'));
-      });
-    });
+    ref.watch(notificationSyncTriggerProvider);
 
     return MaterialApp(
       title: 'SalahSync',
@@ -61,26 +54,6 @@ class _SalahSyncAppState extends ConsumerState<SalahSyncApp>
       ),
       home: const AppScaffold(),
     );
-  }
-
-  Future<void> _scheduleNotificationSync({required String reason}) async {
-    if (_syncInFlight) {
-      _syncQueued = true;
-      return;
-    }
-
-    _syncInFlight = true;
-    try {
-      await ref
-          .read(notificationSyncServiceProvider)
-          .syncWindow(reason: reason);
-    } finally {
-      _syncInFlight = false;
-      if (_syncQueued) {
-        _syncQueued = false;
-        unawaited(_scheduleNotificationSync(reason: 'queued-refresh'));
-      }
-    }
   }
 }
 

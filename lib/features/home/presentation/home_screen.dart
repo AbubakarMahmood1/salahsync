@@ -9,12 +9,19 @@ import '../../../core/mosque/resolved_timing.dart';
 import '../../../core/time/prayer_calculation_config.dart';
 import '../../../core/time/salah_prayer.dart';
 import '../../../data/models/home_schedule_read_model.dart';
+import 'home_prayer_status.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final refreshTick = ref.watch(scheduleRefreshTickProvider);
+    final now = refreshTick.when(
+      data: (value) => value,
+      error: (_, _) => DateTime.now(),
+      loading: DateTime.now,
+    );
     final homeSchedule = ref.watch(homeScheduleProvider);
 
     return homeSchedule.when(
@@ -31,36 +38,21 @@ class HomeScreen extends ConsumerWidget {
           );
         }
 
-        final snapshot = model.computedSnapshot;
-        final now = DateTime.now();
-        final currentPrayer = _displayPrayerForDate(
-          snapshot.currentWindowPrayerAt(now),
-          snapshot.date,
-        );
-        final nextPrayer =
-            _displayPrayerForDate(snapshot.nextPrayerAt(now), snapshot.date) ??
-            SalahPrayer.fajr;
-        var nextPrayerTime = snapshot.timeOf(
-          nextPrayer == SalahPrayer.jummah ? SalahPrayer.dhuhr : nextPrayer,
-        );
-        if (nextPrayer == SalahPrayer.fajr &&
-            now.isAfter(snapshot.timeOf(SalahPrayer.isha))) {
-          nextPrayerTime = nextPrayerTime.add(const Duration(days: 1));
-        }
+        final status = computeHomePrayerStatus(model: model, now: now);
 
         return ListView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
           children: [
             _SummaryCard(
               model: model,
-              currentPrayer: currentPrayer,
-              nextPrayer: nextPrayer,
-              nextPrayerTime: nextPrayerTime,
+              currentPrayer: status.currentPrayer,
+              nextPrayer: status.nextPrayer,
+              nextPrayerTime: status.nextPrayerTime,
             ),
             const SizedBox(height: 16),
             _ConfigCard(model: model),
             const SizedBox(height: 16),
-            _ScheduleCard(model: model, nextPrayer: nextPrayer),
+            _ScheduleCard(model: model, nextPrayer: status.nextPrayer),
           ],
         );
       },
@@ -73,16 +65,6 @@ class HomeScreen extends ConsumerWidget {
         },
       ),
     );
-  }
-
-  SalahPrayer? _displayPrayerForDate(SalahPrayer? prayer, DateTime date) {
-    if (prayer == null) {
-      return null;
-    }
-    if (date.weekday == DateTime.friday && prayer == SalahPrayer.dhuhr) {
-      return SalahPrayer.jummah;
-    }
-    return prayer;
   }
 }
 

@@ -864,7 +864,7 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
     ref.invalidate(notificationRuntimeStatusProvider);
     await ref
         .read(notificationSyncServiceProvider)
-        .syncWindow(reason: 'notification-permission-change');
+        .scheduleSync(reason: 'notification-permission-change');
     if (!mounted) {
       return;
     }
@@ -892,7 +892,7 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
     ref.invalidate(notificationRuntimeStatusProvider);
     await ref
         .read(notificationSyncServiceProvider)
-        .syncWindow(reason: 'exact-alarm-permission-change');
+        .scheduleSync(reason: 'exact-alarm-permission-change');
     if (!mounted) {
       return;
     }
@@ -911,7 +911,7 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
     try {
       final result = await ref
           .read(notificationSyncServiceProvider)
-          .syncWindow(reason: 'settings-manual-rebuild');
+          .scheduleSync(reason: 'settings-manual-rebuild');
       ref.invalidate(notificationRuntimeStatusProvider);
       if (!mounted) {
         return;

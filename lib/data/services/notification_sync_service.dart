@@ -34,6 +34,9 @@ class NotificationSyncService {
   factory NotificationSyncService.background({
     FlutterLocalNotificationsPlugin? plugin,
   }) {
+    // Workmanager runs on a separate isolate, so it needs its own database
+    // handle. This service only reads SQLite state before scheduling through
+    // the platform plugin; it does not write application data back to the DB.
     final database = AppDatabase.local();
     return NotificationSyncService._background(
       database: database,
@@ -60,6 +63,9 @@ class NotificationSyncService {
 
   bool _initialized = false;
   bool _platformAvailable = true;
+  Future<NotificationSyncResult>? _scheduledSyncInFlight;
+  bool _scheduledSyncQueued = false;
+  String? _scheduledSyncQueuedReason;
 
   Future<void> dispose() async {
     await _ownedDatabase?.close();
@@ -178,6 +184,27 @@ class NotificationSyncService {
     }
   }
 
+  Future<NotificationSyncResult> scheduleSync({
+    DateTime? now,
+    String reason = 'manual',
+  }) async {
+    if (_scheduledSyncInFlight != null) {
+      _scheduledSyncQueued = true;
+      _scheduledSyncQueuedReason = reason;
+      return _scheduledSyncInFlight!;
+    }
+
+    final future = _runScheduledSyncLoop(now: now, reason: reason);
+    _scheduledSyncInFlight = future;
+    try {
+      return await future;
+    } finally {
+      if (identical(_scheduledSyncInFlight, future)) {
+        _scheduledSyncInFlight = null;
+      }
+    }
+  }
+
   Future<NotificationSyncResult> syncWindow({
     DateTime? now,
     String reason = 'manual',
@@ -234,21 +261,30 @@ class NotificationSyncService {
       }
 
       final useExactScheduling = runtimeStatus.isUsingExactScheduling;
+      var scheduledCount = 0;
       for (final plan in plans) {
-        await _schedulePlan(
-          plan,
-          timezoneName: config.timezoneName,
-          useExactScheduling: useExactScheduling,
-        );
+        try {
+          await _schedulePlan(
+            plan,
+            timezoneName: config.timezoneName,
+            useExactScheduling: useExactScheduling,
+          );
+          scheduledCount++;
+        } catch (error, stackTrace) {
+          debugPrint(
+            'NotificationSyncService.syncWindow($reason) failed plan=${plan.id} kind=${plan.kind.name} prayer=${plan.prayer.name}: $error',
+          );
+          debugPrintStack(stackTrace: stackTrace);
+        }
       }
 
       debugPrint(
-        'NotificationSyncService.syncWindow($reason) scheduled=${plans.length} cancelled=$cancelledCount exact=$useExactScheduling',
+        'NotificationSyncService.syncWindow($reason) scheduled=$scheduledCount cancelled=$cancelledCount exact=$useExactScheduling total=${plans.length}',
       );
 
       return NotificationSyncResult(
         platformAvailable: true,
-        scheduledCount: plans.length,
+        scheduledCount: scheduledCount,
         cancelledCount: cancelledCount,
         runtimeStatus: runtimeStatus,
       );
@@ -278,6 +314,23 @@ class NotificationSyncService {
         ),
       );
     }
+  }
+
+  Future<NotificationSyncResult> _runScheduledSyncLoop({
+    DateTime? now,
+    required String reason,
+  }) async {
+    var currentReason = reason;
+    late NotificationSyncResult lastResult;
+
+    do {
+      _scheduledSyncQueued = false;
+      _scheduledSyncQueuedReason = null;
+      lastResult = await syncWindow(now: now, reason: currentReason);
+      currentReason = _scheduledSyncQueuedReason ?? 'queued-refresh';
+    } while (_scheduledSyncQueued);
+
+    return lastResult;
   }
 
   Future<void> _schedulePlan(

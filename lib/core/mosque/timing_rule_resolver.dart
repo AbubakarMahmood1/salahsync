@@ -133,19 +133,25 @@ class TimingRuleResolver {
   }
 
   Iterable<String> _rangeKeys(MonthDay start, MonthDay end) sync* {
-    var cursor = DateTime(2024, start.month, start.day);
-    final target = DateTime(
-      start.compareTo(end) <= 0 ? 2024 : 2025,
-      end.month,
-      end.day,
-    );
-
-    while (!cursor.isAfter(target)) {
-      final month = cursor.month.toString().padLeft(2, '0');
-      final day = cursor.day.toString().padLeft(2, '0');
-      yield '$month-$day';
-      cursor = cursor.add(const Duration(days: 1));
+    var cursor = start;
+    while (true) {
+      yield cursor.toString();
+      if (cursor.compareTo(end) == 0) {
+        return;
+      }
+      cursor = _nextMonthDay(cursor);
     }
+  }
+
+  MonthDay _nextMonthDay(MonthDay value) {
+    final daysInMonth = DateTime.utc(2024, value.month + 1, 0).day;
+    if (value.day < daysInMonth) {
+      return MonthDay(month: value.month, day: value.day + 1);
+    }
+    if (value.month < 12) {
+      return MonthDay(month: value.month + 1, day: 1);
+    }
+    return const MonthDay(month: 1, day: 1);
   }
 
   int _modeSpecificity(TimingRuleMode mode) {

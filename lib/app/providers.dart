@@ -1,9 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/notifications/notification_preferences.dart';
 import '../core/notifications/notification_runtime_status.dart';
+import '../core/notifications/notification_sync_result.dart';
 import '../core/settings/app_theme_mode.dart';
-import '../core/mosque/timing_rule.dart';
 import '../core/time/prayer_calculation_config.dart';
 import '../core/time/prayer_time_service.dart';
 import '../data/db/app_database.dart';
@@ -85,6 +87,39 @@ final appBootstrapProvider = FutureProvider<void>((ref) async {
   await ref.watch(appSeedServiceProvider).seedIfEmpty();
 });
 
+final scheduleRefreshTickProvider = StreamProvider<DateTime>((ref) {
+  final controller = StreamController<DateTime>();
+  Timer? timer;
+
+  void scheduleNextTick() {
+    final now = DateTime.now();
+    final nextTick = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      now.hour,
+      now.minute + 1,
+    );
+    timer = Timer(nextTick.difference(now), () {
+      if (controller.isClosed) {
+        return;
+      }
+      controller.add(DateTime.now());
+      scheduleNextTick();
+    });
+  }
+
+  controller.add(DateTime.now());
+  scheduleNextTick();
+
+  ref.onDispose(() async {
+    timer?.cancel();
+    await controller.close();
+  });
+
+  return controller.stream;
+});
+
 final prayerCalculationConfigProvider = FutureProvider<PrayerCalculationConfig>(
   (ref) async {
     await ref.watch(appBootstrapProvider.future);
@@ -144,6 +179,12 @@ final homeScheduleProvider = FutureProvider<HomeScheduleReadModel?>((
   ref,
 ) async {
   await ref.watch(appBootstrapProvider.future);
+  final refreshTick = ref.watch(scheduleRefreshTickProvider);
+  final now = refreshTick.when(
+    data: (value) => value,
+    error: (_, _) => DateTime.now(),
+    loading: DateTime.now,
+  );
 
   final mosqueRepository = ref.watch(mosqueRepositoryProvider);
   final settingsRepository = ref.watch(settingsRepositoryProvider);
@@ -161,7 +202,7 @@ final homeScheduleProvider = FutureProvider<HomeScheduleReadModel?>((
   );
 
   return readService.buildHomeSchedule(
-    date: DateTime.now(),
+    date: now,
     config: config,
     primaryMosque: primaryMosque,
     rules: rules,
@@ -171,6 +212,12 @@ final homeScheduleProvider = FutureProvider<HomeScheduleReadModel?>((
 final comparisonSchedulesProvider =
     FutureProvider<List<MosqueComparisonScheduleReadModel>>((ref) async {
       await ref.watch(appBootstrapProvider.future);
+      final refreshTick = ref.watch(scheduleRefreshTickProvider);
+      final now = refreshTick.when(
+        data: (value) => value,
+        error: (_, _) => DateTime.now(),
+        loading: DateTime.now,
+      );
 
       final mosqueRepository = ref.watch(mosqueRepositoryProvider);
       final settingsRepository = ref.watch(settingsRepositoryProvider);
@@ -183,34 +230,25 @@ final comparisonSchedulesProvider =
       }
 
       final config = await settingsRepository.loadPrayerCalculationConfig();
-      final rulesByMosque = <int, List<TimingRule>>{};
-      for (final mosque in mosques) {
-        rulesByMosque[mosque.id] = await timingRuleRepository
-            .listDomainForMosque(mosque.id);
-      }
+      final rulesByMosque = await timingRuleRepository.listDomainForMosques(
+        mosques.map((mosque) => mosque.id),
+      );
 
       return readService.buildComparisonSchedules(
-        date: DateTime.now(),
+        date: now,
         config: config,
         mosques: mosques,
         rulesByMosque: rulesByMosque,
       );
     });
 
-final notificationSyncTriggerProvider = FutureProvider<void>((ref) async {
+final notificationSyncTriggerProvider = FutureProvider<NotificationSyncResult>((
+  ref,
+) async {
   await ref.watch(appBootstrapProvider.future);
-
-  final settingsRepository = ref.watch(settingsRepositoryProvider);
-  final mosqueRepository = ref.watch(mosqueRepositoryProvider);
-  final timingRuleRepository = ref.watch(timingRuleRepositoryProvider);
-
-  await settingsRepository.loadPrayerCalculationConfig();
-  await settingsRepository.loadNotificationPreferences();
-
-  final primaryMosque = await mosqueRepository.getPrimary();
-  if (primaryMosque != null) {
-    await timingRuleRepository.listForMosque(primaryMosque.id);
-  }
+  return ref
+      .watch(notificationSyncServiceProvider)
+      .scheduleSync(reason: 'data-change');
 });
 
 final notificationRuntimeStatusProvider =
@@ -245,5 +283,5 @@ Future<void> syncNotificationsAfterForegroundChange(WidgetRef ref) async {
   ref.invalidate(notificationRuntimeStatusProvider);
   await ref
       .read(notificationSyncServiceProvider)
-      .syncWindow(reason: 'foreground-resume');
+      .scheduleSync(reason: 'foreground-resume');
 }

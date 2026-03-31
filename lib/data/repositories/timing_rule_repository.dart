@@ -40,53 +40,75 @@ class TimingRuleRepository {
     return rows.map(_toDomain).toList();
   }
 
+  Future<Map<int, List<TimingRule>>> listDomainForMosques(
+    Iterable<int> mosqueIds,
+  ) async {
+    final ids = mosqueIds.toList(growable: false);
+    if (ids.isEmpty) {
+      return const <int, List<TimingRule>>{};
+    }
+
+    final rows = await listForMosques(ids);
+    final grouped = <int, List<TimingRule>>{
+      for (final mosqueId in ids) mosqueId: <TimingRule>[],
+    };
+    for (final row in rows) {
+      grouped
+          .putIfAbsent(row.mosqueId, () => <TimingRule>[])
+          .add(_toDomain(row));
+    }
+    return grouped;
+  }
+
   Future<int> save(TimingRuleDraft draft) async {
-    _validateDraft(draft);
-    await _validateNoOverlap(draft);
+    return _db.transaction(() async {
+      _validateDraft(draft);
+      await _validateNoOverlap(draft);
 
-    if (draft.id == null) {
-      return _db
-          .into(_db.timingRuleEntries)
-          .insert(
-            TimingRuleEntriesCompanion(
-              mosqueId: Value(draft.mosqueId),
-              prayer: Value(draft.prayer),
-              mode: Value(draft.mode),
-              offsetMinutes: Value(draft.offsetMinutes),
-              fixedTime: Value(draft.fixedTime),
-              rangeStart: Value(draft.rangeStart),
-              rangeEnd: Value(draft.rangeEnd),
-              priority: Value(draft.priority),
-              createdAt: Value(_nowIso()),
-            ),
-          );
-    }
+      if (draft.id == null) {
+        return _db
+            .into(_db.timingRuleEntries)
+            .insert(
+              TimingRuleEntriesCompanion(
+                mosqueId: Value(draft.mosqueId),
+                prayer: Value(draft.prayer),
+                mode: Value(draft.mode),
+                offsetMinutes: Value(draft.offsetMinutes),
+                fixedTime: Value(draft.fixedTime),
+                rangeStart: Value(draft.rangeStart),
+                rangeEnd: Value(draft.rangeEnd),
+                priority: Value(draft.priority),
+                createdAt: Value(_nowIso()),
+              ),
+            );
+      }
 
-    final existing = await (_db.select(
-      _db.timingRuleEntries,
-    )..where((table) => table.id.equals(draft.id!))).getSingleOrNull();
-    if (existing == null) {
-      throw TimingRuleValidationException(
-        'Cannot update missing timing rule ${draft.id}',
+      final existing = await (_db.select(
+        _db.timingRuleEntries,
+      )..where((table) => table.id.equals(draft.id!))).getSingleOrNull();
+      if (existing == null) {
+        throw TimingRuleValidationException(
+          'Cannot update missing timing rule ${draft.id}',
+        );
+      }
+
+      await (_db.update(
+        _db.timingRuleEntries,
+      )..where((table) => table.id.equals(draft.id!))).write(
+        TimingRuleEntriesCompanion(
+          mosqueId: Value(draft.mosqueId),
+          prayer: Value(draft.prayer),
+          mode: Value(draft.mode),
+          offsetMinutes: Value(draft.offsetMinutes),
+          fixedTime: Value(draft.fixedTime),
+          rangeStart: Value(draft.rangeStart),
+          rangeEnd: Value(draft.rangeEnd),
+          priority: Value(draft.priority),
+          createdAt: Value(existing.createdAt),
+        ),
       );
-    }
-
-    await (_db.update(
-      _db.timingRuleEntries,
-    )..where((table) => table.id.equals(draft.id!))).write(
-      TimingRuleEntriesCompanion(
-        mosqueId: Value(draft.mosqueId),
-        prayer: Value(draft.prayer),
-        mode: Value(draft.mode),
-        offsetMinutes: Value(draft.offsetMinutes),
-        fixedTime: Value(draft.fixedTime),
-        rangeStart: Value(draft.rangeStart),
-        rangeEnd: Value(draft.rangeEnd),
-        priority: Value(draft.priority),
-        createdAt: Value(existing.createdAt),
-      ),
-    );
-    return draft.id!;
+      return draft.id!;
+    });
   }
 
   Future<void> delete(int ruleId) async {
