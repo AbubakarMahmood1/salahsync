@@ -188,6 +188,28 @@ void main() {
       expect(conflicts.single.firstRuleId, 10);
       expect(conflicts.single.secondRuleId, 11);
     });
+
+    test('rejects invalid date-range endpoints instead of looping forever', () {
+      expect(
+        () => resolver.findDateRangeConflicts(const [
+          TimingRule.dateRangeFixed(
+            id: 10,
+            prayer: SalahPrayer.isha,
+            fixedTime: TimeOfDayValue(hour: 20, minute: 30),
+            rangeStart: MonthDay(month: 1, day: 1),
+            rangeEnd: MonthDay(month: 2, day: 31),
+          ),
+          TimingRule.dateRangeFixed(
+            id: 11,
+            prayer: SalahPrayer.isha,
+            fixedTime: TimeOfDayValue(hour: 20, minute: 0),
+            rangeStart: MonthDay(month: 3, day: 1),
+            rangeEnd: MonthDay(month: 4, day: 1),
+          ),
+        ]),
+        throwsA(isA<FormatException>()),
+      );
+    });
   });
 }
 

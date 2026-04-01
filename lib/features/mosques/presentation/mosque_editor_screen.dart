@@ -783,6 +783,8 @@ class _TimingRuleEditorSheetState
     try {
       _parseMonthDay(value ?? '');
       return null;
+    } on FormatException catch (error) {
+      return error.message.toString();
     } catch (_) {
       return 'Use MM-DD';
     }
@@ -795,14 +797,7 @@ class _TimingRuleEditorSheetState
       throw const FormatException('Use MM-DD');
     }
 
-    final parsed = MonthDay.parse(trimmed);
-    if (parsed.month < 1 ||
-        parsed.month > 12 ||
-        parsed.day < 1 ||
-        parsed.day > 31) {
-      throw const FormatException('Invalid month/day');
-    }
-    return parsed;
+    return MonthDay.parse(trimmed);
   }
 
   void _showError(String message) {

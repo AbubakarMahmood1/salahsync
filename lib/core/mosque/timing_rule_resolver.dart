@@ -133,18 +133,21 @@ class TimingRuleResolver {
   }
 
   Iterable<String> _rangeKeys(MonthDay start, MonthDay end) sync* {
+    start.validate();
+    end.validate();
     var cursor = start;
-    while (true) {
+    for (var index = 0; index < 366; index++) {
       yield cursor.toString();
       if (cursor.compareTo(end) == 0) {
         return;
       }
       cursor = _nextMonthDay(cursor);
     }
+    throw StateError('Invalid date range: $start -> $end');
   }
 
   MonthDay _nextMonthDay(MonthDay value) {
-    final daysInMonth = DateTime.utc(2024, value.month + 1, 0).day;
+    final daysInMonth = MonthDay.daysInMonth(value.month);
     if (value.day < daysInMonth) {
       return MonthDay(month: value.month, day: value.day + 1);
     }

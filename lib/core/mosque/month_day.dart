@@ -7,11 +7,42 @@ class MonthDay {
       throw FormatException('Expected MM-DD but received $value');
     }
 
-    return MonthDay(month: int.parse(parts[0]), day: int.parse(parts[1]));
+    final parsed = MonthDay(
+      month: int.parse(parts[0]),
+      day: int.parse(parts[1]),
+    );
+    parsed.validate();
+    return parsed;
   }
 
   final int month;
   final int day;
+
+  static int? tryDaysInMonth(int month) {
+    if (month < 1 || month > 12) {
+      return null;
+    }
+    return DateTime.utc(2024, month + 1, 0).day;
+  }
+
+  static int daysInMonth(int month) {
+    final days = tryDaysInMonth(month);
+    if (days == null) {
+      throw const FormatException('Invalid month/day');
+    }
+    return days;
+  }
+
+  bool get isValid {
+    final days = tryDaysInMonth(month);
+    return days != null && day >= 1 && day <= days;
+  }
+
+  void validate() {
+    if (!isValid) {
+      throw const FormatException('Invalid month/day');
+    }
+  }
 
   int compareTo(MonthDay other) {
     if (month != other.month) {

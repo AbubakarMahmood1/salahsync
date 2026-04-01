@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:salahsync/core/prayer_log/prayer_log_status.dart';
 import 'package:salahsync/core/time/salah_prayer.dart';
-import 'package:salahsync/data/models/prayer_log_read_model.dart';
 import 'package:salahsync/data/models/prayer_log_record.dart';
 import 'package:salahsync/data/services/prayer_log_read_service.dart';
 

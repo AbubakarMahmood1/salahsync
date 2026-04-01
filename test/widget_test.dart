@@ -14,7 +14,9 @@ void main() {
     tz.initializeTimeZones();
   });
 
-  testWidgets('app shell shows the milestone tabs', (tester) async {
+  testWidgets('app shell shows the primary tabs and home utilities', (
+    tester,
+  ) async {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);
     addTearDown(() async {
@@ -40,12 +42,24 @@ void main() {
     expect(find.text('Compare'), findsOneWidget);
     expect(find.text('Settings'), findsOneWidget);
     expect(find.text('Masjid Al-Noor'), findsOneWidget);
+    expect(find.text('Current time'), findsOneWidget);
     expect(find.text('Planner'), findsOneWidget);
-    expect(find.text('Verify'), findsOneWidget);
+    expect(find.text('Prayer Log'), findsOneWidget);
 
-    await tester.tap(find.text('Planner'));
+    final plannerTile = find.widgetWithText(ListTile, 'Planner');
+    await tester.ensureVisible(plannerTile);
+    tester.widget<ListTile>(plannerTile).onTap!();
     await tester.pumpAndSettle();
     expect(find.text('Ibadah planner'), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    final verifyTile = find.widgetWithText(ListTile, 'Verify');
+    await tester.ensureVisible(verifyTile);
+    tester.widget<ListTile>(verifyTile).onTap!();
+    await tester.pumpAndSettle();
+    expect(find.text('Verify AlAdhan'), findsOneWidget);
 
     await tester.pageBack();
     await tester.pumpAndSettle();

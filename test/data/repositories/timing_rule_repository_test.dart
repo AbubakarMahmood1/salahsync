@@ -174,4 +174,20 @@ void main() {
       throwsA(isA<TimingRuleValidationException>()),
     );
   });
+
+  test('rejects invalid month/day values for date-range rules', () async {
+    expect(
+      () => repository.save(
+        TimingRuleDraft(
+          mosqueId: mosqueId,
+          prayer: SalahPrayer.isha,
+          mode: TimingRuleMode.dateRangeFixed,
+          fixedTime: const TimeOfDayValue(hour: 20, minute: 15),
+          rangeStart: const MonthDay(month: 2, day: 31),
+          rangeEnd: const MonthDay(month: 4, day: 1),
+        ),
+      ),
+      throwsA(isA<TimingRuleValidationException>()),
+    );
+  });
 }

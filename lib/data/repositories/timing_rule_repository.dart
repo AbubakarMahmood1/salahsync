@@ -126,32 +126,42 @@ class TimingRuleRepository {
       return;
     }
 
-    final existing = (await listForMosque(draft.mosqueId))
-        .where(
-          (rule) =>
-              rule.id != draft.id &&
-              rule.prayer == draft.prayer &&
-              rule.mode == TimingRuleMode.dateRangeFixed,
-        )
-        .map(_toDomain)
-        .toList();
+    try {
+      final existing = (await listForMosque(draft.mosqueId))
+          .where(
+            (rule) =>
+                rule.id != draft.id &&
+                rule.prayer == draft.prayer &&
+                rule.mode == TimingRuleMode.dateRangeFixed,
+          )
+          .map(_toDomain)
+          .toList();
 
-    final candidate = TimingRule.dateRangeFixed(
-      id: draft.id,
-      prayer: draft.prayer,
-      fixedTime: draft.fixedTime!,
-      rangeStart: draft.rangeStart!,
-      rangeEnd: draft.rangeEnd!,
-      priority: draft.priority,
-    );
+      final candidate = TimingRule.dateRangeFixed(
+        id: draft.id,
+        prayer: draft.prayer,
+        fixedTime: draft.fixedTime!,
+        rangeStart: draft.rangeStart!,
+        rangeEnd: draft.rangeEnd!,
+        priority: draft.priority,
+      );
 
-    final conflicts = _resolver.findDateRangeConflicts([
-      ...existing,
-      candidate,
-    ]);
-    if (conflicts.isNotEmpty) {
+      final conflicts = _resolver.findDateRangeConflicts([
+        ...existing,
+        candidate,
+      ]);
+      if (conflicts.isNotEmpty) {
+        throw TimingRuleValidationException(
+          'Overlapping date-range rule for ${draft.prayer.name}',
+        );
+      }
+    } on FormatException catch (_) {
       throw TimingRuleValidationException(
-        'Overlapping date-range rule for ${draft.prayer.name}',
+        'Date-range rules must use real calendar dates in MM-DD format',
+      );
+    } on StateError catch (_) {
+      throw TimingRuleValidationException(
+        'Date-range rules must use real calendar dates in MM-DD format',
       );
     }
   }
@@ -176,6 +186,14 @@ class TimingRuleRepository {
             draft.rangeEnd == null) {
           throw TimingRuleValidationException(
             'Date-range rules require fixedTime, rangeStart, and rangeEnd',
+          );
+        }
+        try {
+          draft.rangeStart!.validate();
+          draft.rangeEnd!.validate();
+        } on FormatException catch (_) {
+          throw TimingRuleValidationException(
+            'Date-range rules must use real calendar dates in MM-DD format',
           );
         }
         return;
